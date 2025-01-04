@@ -1,0 +1,4 @@
+member_id,name,email,phone_number
+M001,Member One,member1@example.com,1234567890
+M002,Member Two,member2@example.com,2345678901
+M003,Member Three,member3@example.com,3456789012

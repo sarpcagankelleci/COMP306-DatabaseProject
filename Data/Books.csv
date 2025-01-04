@@ -1,0 +1,4 @@
+book_id,title,author_id,category,available
+B001,Book One,A001,Fiction,5
+B002,Book Two,A002,Science,3
+B003,Book Three,A003,History,4

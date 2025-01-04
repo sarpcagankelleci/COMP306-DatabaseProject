@@ -1,0 +1,4 @@
+record_id,member_id,book_id,borrow_date,return_date
+R001,M001,B001,2025-01-01,2025-01-10
+R002,M002,B002,2025-01-02,
+R003,M003,B003,2025-01-03,
