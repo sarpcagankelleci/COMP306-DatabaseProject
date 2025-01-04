@@ -12,7 +12,7 @@ import csv
 db_connection = mysql.connector.connect(
     host="localhost",
     user="root",
-    passwd="Sultan9988",
+    passwd="ksu12345",
     auth_plugin='mysql_native_password'
 )
 db_cursor = db_connection.cursor(buffered=True)
@@ -100,12 +100,29 @@ def login_screen():
     login_window.title("Admin Login")
     login_window.geometry("400x300")
 
+    # Fetch Admin IDs for dropdown
+    db_cursor.execute("SELECT admin_id FROM Admins")
+    admin_ids = [row[0] for row in db_cursor.fetchall()]
+
+    # Admin ID Dropdown
+    admin_id_label = customtkinter.CTkLabel(login_window, text="Select Admin ID:")
+    admin_id_label.pack(pady=10)
+    admin_id_combo = ttk.Combobox(login_window, values=admin_ids, state="readonly")
+    admin_id_combo.pack(pady=10)
+
+    # Password Entry
+    password_label = customtkinter.CTkLabel(login_window, text="Password:")
+    password_label.pack(pady=10)
+    password_entry = customtkinter.CTkEntry(login_window, show="*")
+    password_entry.pack(pady=10)
+
+    # Validate Login Function
     def validate_login():
-        admin_id = admin_id_entry.get()
+        admin_id = admin_id_combo.get()
         password = password_entry.get()
 
         if not admin_id or not password:
-            messagebox.showwarning("Input Error", "Please enter both Admin ID and Password.")
+            messagebox.showwarning("Input Error", "Please select Admin ID and enter Password.")
             return
 
         db_cursor.execute("SELECT * FROM Admins WHERE admin_id = %s AND password = %s", (admin_id, password))
@@ -118,21 +135,12 @@ def login_screen():
         else:
             messagebox.showerror("Login Failed", "Invalid Admin ID or Password.")
 
-    # Giriş formu
-    admin_id_label = customtkinter.CTkLabel(login_window, text="Admin ID:")
-    admin_id_label.pack(pady=10)
-    admin_id_entry = customtkinter.CTkEntry(login_window)
-    admin_id_entry.pack(pady=10)
-
-    password_label = customtkinter.CTkLabel(login_window, text="Password:")
-    password_label.pack(pady=10)
-    password_entry = customtkinter.CTkEntry(login_window, show="*")
-    password_entry.pack(pady=10)
-
+    # Login Button
     login_button = customtkinter.CTkButton(login_window, text="Login", command=validate_login)
     login_button.pack(pady=20)
 
     login_window.mainloop()
+
 
 # Main App
 def start_main_app():
@@ -349,29 +357,41 @@ def start_main_app():
         add_borrowing_window.title("Add Borrowing Record")
         add_borrowing_window.geometry("400x400")
 
+        # Fetch Book IDs and Member IDs for dropdowns
+        db_cursor.execute("SELECT book_id FROM Books WHERE quantity > 0")
+        available_books = [row[0] for row in db_cursor.fetchall()]
+
+        db_cursor.execute("SELECT member_id FROM Members")
+        available_members = [row[0] for row in db_cursor.fetchall()]
+
+        # Book ID Dropdown
         book_id_label = Label(add_borrowing_window, text="Book ID")
         book_id_label.pack(pady=5)
-        book_id_entry = Entry(add_borrowing_window)
-        book_id_entry.pack(pady=5)
+        book_id_combo = ttk.Combobox(add_borrowing_window, values=available_books, state="readonly")
+        book_id_combo.pack(pady=5)
 
+        # Member ID Dropdown
         member_id_label = Label(add_borrowing_window, text="Member ID")
         member_id_label.pack(pady=5)
-        member_id_entry = Entry(add_borrowing_window)
-        member_id_entry.pack(pady=5)
+        member_id_combo = ttk.Combobox(add_borrowing_window, values=available_members, state="readonly")
+        member_id_combo.pack(pady=5)
 
+        # Borrow Date Entry
         borrow_date_label = Label(add_borrowing_window, text="Borrow Date (YYYY-MM-DD)")
         borrow_date_label.pack(pady=5)
         borrow_date_entry = Entry(add_borrowing_window)
         borrow_date_entry.pack(pady=5)
 
+        # Return Date Entry
         return_date_label = Label(add_borrowing_window, text="Return Date (YYYY-MM-DD)")
         return_date_label.pack(pady=5)
         return_date_entry = Entry(add_borrowing_window)
         return_date_entry.pack(pady=5)
 
+        # Add Borrowing Record Function
         def add_borrowing():
-            book_id = book_id_entry.get()
-            member_id = member_id_entry.get()
+            book_id = book_id_combo.get()
+            member_id = member_id_combo.get()
             borrow_date = borrow_date_entry.get()
             return_date = return_date_entry.get()
 
@@ -379,6 +399,7 @@ def start_main_app():
                 messagebox.showwarning("Input Error", "Please fill all required fields.")
                 return
 
+            # Insert borrowing record and update book quantity
             db_cursor.execute(
                 "INSERT INTO Borrowing (book_id, member_id, borrow_date, return_date) VALUES (%s, %s, %s, %s)",
                 (book_id, member_id, borrow_date, return_date)
@@ -392,6 +413,7 @@ def start_main_app():
             messagebox.showinfo("Success", "Borrowing record added successfully!")
             add_borrowing_window.destroy()
 
+        # Add Borrowing Button
         add_borrowing_button = Button(add_borrowing_window, text="Add Borrowing Record", command=add_borrowing)
         add_borrowing_button.pack(pady=10)
 
