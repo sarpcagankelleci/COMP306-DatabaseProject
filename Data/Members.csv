@@ -1,4 +1,6 @@
-member_id,name,email,phone_number
-M001,Member One,member1@example.com,1234567890
-M002,Member Two,member2@example.com,2345678901
-M003,Member Three,member3@example.com,3456789012
+member_id,first_name,last_name,phone_number,email
+MB001,John,Doe,1234567890,john.doe@example.com
+MB002,Jane,Smith,0987654321,jane.smith@example.com
+MB003,Emily,Jones,1122334455,emily.jones@example.com
+MB004,Michael,Brown,2233445566,michael.brown@example.com
+MB005,Emma,Wilson,3344556677,emma.wilson@example.com
