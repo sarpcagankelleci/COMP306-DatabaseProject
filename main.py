@@ -3,6 +3,7 @@ import customtkinter
 from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
+from tkcalendar import Calendar
 
 # Imports for database
 import mysql.connector
@@ -352,10 +353,11 @@ def start_main_app():
 
     refresh_borrowing_tree()
 
+
     def open_add_borrowing_window():
         add_borrowing_window = Toplevel(main_app)
         add_borrowing_window.title("Add Borrowing Record")
-        add_borrowing_window.geometry("400x400")
+        add_borrowing_window.geometry("400x500")
 
         # Fetch Book IDs and Member IDs for dropdowns
         db_cursor.execute("SELECT book_id FROM Books WHERE quantity > 0")
@@ -376,26 +378,26 @@ def start_main_app():
         member_id_combo = ttk.Combobox(add_borrowing_window, values=available_members, state="readonly")
         member_id_combo.pack(pady=5)
 
-        # Borrow Date Entry
-        borrow_date_label = Label(add_borrowing_window, text="Borrow Date (YYYY-MM-DD)")
+        # Borrow Date Calendar
+        borrow_date_label = Label(add_borrowing_window, text="Borrow Date")
         borrow_date_label.pack(pady=5)
-        borrow_date_entry = Entry(add_borrowing_window)
-        borrow_date_entry.pack(pady=5)
+        borrow_date_calendar = Calendar(add_borrowing_window, date_pattern="yyyy-mm-dd")
+        borrow_date_calendar.pack(pady=5)
 
-        # Return Date Entry
-        return_date_label = Label(add_borrowing_window, text="Return Date (YYYY-MM-DD)")
+        # Return Date Calendar
+        return_date_label = Label(add_borrowing_window, text="Return Date")
         return_date_label.pack(pady=5)
-        return_date_entry = Entry(add_borrowing_window)
-        return_date_entry.pack(pady=5)
+        return_date_calendar = Calendar(add_borrowing_window, date_pattern="yyyy-mm-dd")
+        return_date_calendar.pack(pady=5)
 
         # Add Borrowing Record Function
         def add_borrowing():
             book_id = book_id_combo.get()
             member_id = member_id_combo.get()
-            borrow_date = borrow_date_entry.get()
-            return_date = return_date_entry.get()
+            borrow_date = borrow_date_calendar.get_date()
+            return_date = return_date_calendar.get_date()
 
-            if not all([book_id, member_id, borrow_date]):
+            if not book_id or not member_id or not borrow_date:
                 messagebox.showwarning("Input Error", "Please fill all required fields.")
                 return
 
@@ -415,7 +417,7 @@ def start_main_app():
 
         # Add Borrowing Button
         add_borrowing_button = Button(add_borrowing_window, text="Add Borrowing Record", command=add_borrowing)
-        add_borrowing_button.pack(pady=10)
+        add_borrowing_button.pack(pady=20)
 
     def delete_borrowing():
         selected_item = borrowing_tree.selection()
