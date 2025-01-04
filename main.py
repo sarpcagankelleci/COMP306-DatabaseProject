@@ -220,15 +220,42 @@ def start_main_app():
             year_published = year_entry.get()
             quantity = quantity_entry.get()
 
+            # Book ID formatını kontrol et
+            if not book_id.startswith("BK"):
+                messagebox.showwarning("Invalid Book ID", "Book ID must start with 'BK'.")
+                return
+
+            # Title, Author ve Genre için minimum 3 karakter kontrolü
+            if len(title) < 3:
+                messagebox.showwarning("Invalid Title", "Title must contain at least 3 characters.")
+                return
+            if len(author) < 3:
+                messagebox.showwarning("Invalid Author", "Author must contain at least 3 characters.")
+                return
+            if len(genre) < 3:
+                messagebox.showwarning("Invalid Genre", "Genre must contain at least 3 characters.")
+                return
+
+            # Year Published kontrolü (4 rakamlı sayı)
+            if not year_published.isdigit() or len(year_published) != 4:
+                messagebox.showwarning("Invalid Year", "Year Published must be a 4-digit number.")
+                return
+
+            # Diğer alanların boş olup olmadığını kontrol et
             if not all([book_id, title, author, genre, year_published, quantity]):
                 messagebox.showwarning("Input Error", "Please fill all fields.")
                 return
 
-            db_cursor.execute(insert_books_query, (book_id, title, author, genre, int(year_published), int(quantity)))
-            db_connection.commit()
-            refresh_books_tree()
-            messagebox.showinfo("Success", "Book added successfully!")
-            add_book_window.destroy()
+            try:
+                # Veritabanına ekleme işlemi
+                db_cursor.execute(insert_books_query,
+                                  (book_id, title, author, genre, int(year_published), int(quantity)))
+                db_connection.commit()
+                refresh_books_tree()
+                messagebox.showinfo("Success", "Book added successfully!")
+                add_book_window.destroy()
+            except Exception as e:
+                messagebox.showerror("Database Error", f"An error occurred: {e}")
 
         add_book_button = Button(add_book_window, text="Add Book", command=add_book)
         add_book_button.pack(pady=10)
@@ -353,11 +380,11 @@ def start_main_app():
 
     refresh_borrowing_tree()
 
-
     def open_add_borrowing_window():
         add_borrowing_window = Toplevel(main_app)
         add_borrowing_window.title("Add Borrowing Record")
-        add_borrowing_window.geometry("400x500")
+        add_borrowing_window.geometry("450x550")
+        add_borrowing_window.configure(bg="#f5f5f5")  # Arka plan rengi
 
         # Fetch Book IDs and Member IDs for dropdowns
         db_cursor.execute("SELECT book_id FROM Books WHERE quantity > 0")
@@ -367,28 +394,52 @@ def start_main_app():
         available_members = [row[0] for row in db_cursor.fetchall()]
 
         # Book ID Dropdown
-        book_id_label = Label(add_borrowing_window, text="Book ID")
+        book_id_label = Label(add_borrowing_window, text="Book ID", bg="#f5f5f5", font=("Arial", 12, "bold"))
         book_id_label.pack(pady=5)
         book_id_combo = ttk.Combobox(add_borrowing_window, values=available_books, state="readonly")
         book_id_combo.pack(pady=5)
 
         # Member ID Dropdown
-        member_id_label = Label(add_borrowing_window, text="Member ID")
+        member_id_label = Label(add_borrowing_window, text="Member ID", bg="#f5f5f5", font=("Arial", 12, "bold"))
         member_id_label.pack(pady=5)
         member_id_combo = ttk.Combobox(add_borrowing_window, values=available_members, state="readonly")
         member_id_combo.pack(pady=5)
 
         # Borrow Date Calendar
-        borrow_date_label = Label(add_borrowing_window, text="Borrow Date")
+        borrow_date_label = Label(add_borrowing_window, text="Borrow Date", bg="#f5f5f5", font=("Arial", 12, "bold"))
         borrow_date_label.pack(pady=5)
-        borrow_date_calendar = Calendar(add_borrowing_window, date_pattern="yyyy-mm-dd")
-        borrow_date_calendar.pack(pady=5)
+        borrow_date_calendar = Calendar(
+            add_borrowing_window,
+            date_pattern="yyyy-mm-dd",
+            selectmode="day",
+            background="#ffcccc",
+            disabledbackground="#f5f5f5",
+            bordercolor="#ff6666",
+            headersbackground="#ff6666",
+            headersforeground="white",
+            foreground="black",
+            weekendforeground="#ff6666",
+            font=("Arial", 10)
+        )
+        borrow_date_calendar.pack(pady=10)
 
         # Return Date Calendar
-        return_date_label = Label(add_borrowing_window, text="Return Date")
+        return_date_label = Label(add_borrowing_window, text="Return Date", bg="#f5f5f5", font=("Arial", 12, "bold"))
         return_date_label.pack(pady=5)
-        return_date_calendar = Calendar(add_borrowing_window, date_pattern="yyyy-mm-dd")
-        return_date_calendar.pack(pady=5)
+        return_date_calendar = Calendar(
+            add_borrowing_window,
+            date_pattern="yyyy-mm-dd",
+            selectmode="day",
+            background="#ccffcc",
+            disabledbackground="#f5f5f5",
+            bordercolor="#66ff66",
+            headersbackground="#66ff66",
+            headersforeground="white",
+            foreground="black",
+            weekendforeground="#66ff66",
+            font=("Arial", 10)
+        )
+        return_date_calendar.pack(pady=10)
 
         # Add Borrowing Record Function
         def add_borrowing():
@@ -401,22 +452,55 @@ def start_main_app():
                 messagebox.showwarning("Input Error", "Please fill all required fields.")
                 return
 
-            # Insert borrowing record and update book quantity
-            db_cursor.execute(
-                "INSERT INTO Borrowing (book_id, member_id, borrow_date, return_date) VALUES (%s, %s, %s, %s)",
-                (book_id, member_id, borrow_date, return_date)
-            )
-            db_cursor.execute(
-                "UPDATE Books SET quantity = quantity - 1 WHERE book_id = %s AND quantity > 0",
-                (book_id,)
-            )
-            db_connection.commit()
-            refresh_borrowing_tree()
-            messagebox.showinfo("Success", "Borrowing record added successfully!")
-            add_borrowing_window.destroy()
+            # Check if the book exists and has a positive quantity
+            db_cursor.execute("SELECT quantity FROM Books WHERE book_id = %s", (book_id,))
+            result = db_cursor.fetchone()
+
+            if result is None:
+                messagebox.showerror("Error", "Book not found.")
+                return
+
+            quantity = result[0]
+
+            if quantity <= 0:
+                messagebox.showwarning("Out of Stock", "The selected book is out of stock.")
+                return
+
+            try:
+                # Insert borrowing record
+                db_cursor.execute(
+                    "INSERT INTO Borrowing (book_id, member_id, borrow_date, return_date) VALUES (%s, %s, %s, %s)",
+                    (book_id, member_id, borrow_date, return_date)
+                )
+
+                # Update book quantity
+                db_cursor.execute(
+                    "UPDATE Books SET quantity = quantity - 1 WHERE book_id = %s AND quantity > 0",
+                    (book_id,)
+                )
+
+                # Commit changes
+                db_connection.commit()
+
+                # Refresh borrowing tree
+                refresh_borrowing_tree()
+                refresh_books_tree()  # Books ekranını da güncelle
+
+                messagebox.showinfo("Success", "Borrowing record added successfully!")
+                add_borrowing_window.destroy()
+            except Exception as e:
+                db_connection.rollback()
+                messagebox.showerror("Error", f"An error occurred: {e}")
 
         # Add Borrowing Button
-        add_borrowing_button = Button(add_borrowing_window, text="Add Borrowing Record", command=add_borrowing)
+        add_borrowing_button = Button(
+            add_borrowing_window,
+            text="Add Borrowing Record",
+            command=add_borrowing,
+            bg="#ff6666",
+            fg="white",
+            font=("Arial", 12, "bold")
+        )
         add_borrowing_button.pack(pady=20)
 
     def delete_borrowing():
