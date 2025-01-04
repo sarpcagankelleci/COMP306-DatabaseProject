@@ -12,7 +12,7 @@ import csv
 db_connection = mysql.connector.connect(
     host="localhost",
     user="root",
-    passwd="ksu12345",
+    passwd="Sultan9988",
     auth_plugin='mysql_native_password'
 )
 db_cursor = db_connection.cursor(buffered=True)
@@ -327,20 +327,91 @@ def start_main_app():
     delete_member_button.pack(pady=5)
 
     # Borrowing Tab
+    # Borrowing Tab
     borrowing_tree_columns = ("Borrow ID", "Book ID", "Member ID", "Borrow Date", "Return Date")
-    borrowing_tree = ttk.Treeview(tabview.tab("Borrowing"), columns=borrowing_tree_columns, show="headings", selectmode="browse")
+    borrowing_tree = ttk.Treeview(tabview.tab("Borrowing"), columns=borrowing_tree_columns, show="headings",
+                                  selectmode="browse")
     borrowing_tree.pack(fill="both", expand=True)
 
     for col in borrowing_tree_columns:
         borrowing_tree.heading(col, text=col)
 
     def refresh_borrowing_tree():
-        borrowing_tree.delete(*borrowing_tree.get_children())
+        borrowing_tree.delete(*borrowing_tree.get_children())  # Clear current data
         db_cursor.execute("SELECT * FROM Borrowing")
         for borrow in db_cursor.fetchall():
             borrowing_tree.insert("", END, values=borrow)
 
     refresh_borrowing_tree()
+
+    def open_add_borrowing_window():
+        add_borrowing_window = Toplevel(main_app)
+        add_borrowing_window.title("Add Borrowing Record")
+        add_borrowing_window.geometry("400x400")
+
+        book_id_label = Label(add_borrowing_window, text="Book ID")
+        book_id_label.pack(pady=5)
+        book_id_entry = Entry(add_borrowing_window)
+        book_id_entry.pack(pady=5)
+
+        member_id_label = Label(add_borrowing_window, text="Member ID")
+        member_id_label.pack(pady=5)
+        member_id_entry = Entry(add_borrowing_window)
+        member_id_entry.pack(pady=5)
+
+        borrow_date_label = Label(add_borrowing_window, text="Borrow Date (YYYY-MM-DD)")
+        borrow_date_label.pack(pady=5)
+        borrow_date_entry = Entry(add_borrowing_window)
+        borrow_date_entry.pack(pady=5)
+
+        return_date_label = Label(add_borrowing_window, text="Return Date (YYYY-MM-DD)")
+        return_date_label.pack(pady=5)
+        return_date_entry = Entry(add_borrowing_window)
+        return_date_entry.pack(pady=5)
+
+        def add_borrowing():
+            book_id = book_id_entry.get()
+            member_id = member_id_entry.get()
+            borrow_date = borrow_date_entry.get()
+            return_date = return_date_entry.get()
+
+            if not all([book_id, member_id, borrow_date]):
+                messagebox.showwarning("Input Error", "Please fill all required fields.")
+                return
+
+            db_cursor.execute(
+                "INSERT INTO Borrowing (book_id, member_id, borrow_date, return_date) VALUES (%s, %s, %s, %s)",
+                (book_id, member_id, borrow_date, return_date)
+            )
+            db_cursor.execute(
+                "UPDATE Books SET quantity = quantity - 1 WHERE book_id = %s AND quantity > 0",
+                (book_id,)
+            )
+            db_connection.commit()
+            refresh_borrowing_tree()
+            messagebox.showinfo("Success", "Borrowing record added successfully!")
+            add_borrowing_window.destroy()
+
+        add_borrowing_button = Button(add_borrowing_window, text="Add Borrowing Record", command=add_borrowing)
+        add_borrowing_button.pack(pady=10)
+
+    def delete_borrowing():
+        selected_item = borrowing_tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Selection Error", "No borrowing record selected.")
+            return
+
+        borrow_id = borrowing_tree.item(selected_item, 'values')[0]
+        db_cursor.execute("DELETE FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
+        db_connection.commit()
+        refresh_borrowing_tree()
+        messagebox.showinfo("Success", f"Borrowing record with ID {borrow_id} has been deleted.")
+
+    add_borrowing_button = Button(tabview.tab("Borrowing"), text="Add Borrowing", command=open_add_borrowing_window)
+    add_borrowing_button.pack(pady=5)
+
+    delete_borrowing_button = Button(tabview.tab("Borrowing"), text="Delete Borrowing", command=delete_borrowing)
+    delete_borrowing_button.pack(pady=5)
 
     main_app.mainloop()
 
