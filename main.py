@@ -1,4 +1,6 @@
 # Imports for UI
+import os
+
 import customtkinter
 from tkinter import *
 from tkinter import ttk
@@ -12,11 +14,12 @@ import csv
 
 # Database Connection
 db_connection = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    passwd="Fatura10*",
-    auth_plugin='mysql_native_password'
+  host="localhost",
+  user="root",
+  passwd="faruk123",
+  auth_plugin='mysql_native_password'
 )
+print(db_connection)
 db_cursor = db_connection.cursor(buffered=True)
 
 # Helper Function: Populate Table from CSV
@@ -27,6 +30,8 @@ def populate_table(file_path, insert_query):
         for row in reader:
             db_cursor.execute(insert_query, row)
     db_connection.commit()
+
+
 
 # Initialize Database
 db_cursor.execute("DROP DATABASE IF EXISTS library")
@@ -48,7 +53,9 @@ db_cursor.execute("""
         author VARCHAR(50),
         genre VARCHAR(30),
         year_published INT,
-        quantity INT
+        quantity INT,
+        language VARCHAR(50),
+        page_number INT
     )
 """)
 db_cursor.execute("""
@@ -98,8 +105,8 @@ db_connection.commit()
 
 # Insert Data
 insert_books_query = """
-    INSERT INTO Books (book_id, title, author, genre, year_published, quantity)
-    VALUES (%s, %s, %s, %s, %s, %s)
+    INSERT INTO Books (book_id, title, author, genre, year_published, quantity, language, page_number)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
 """
 populate_table("./data/Books.csv", insert_books_query)
 
@@ -167,7 +174,7 @@ def start_main_app():
 
     # Tabview Setup
     tabview = customtkinter.CTkTabview(master=main_app)
-    tabview.pack(pady=20, padx=20, fill="both", expand=True)
+    tabview.pack(pady=10, padx=10, fill="both", expand=True)
 
     # Define Tabs
     tabs = ["Books", "Members", "Borrowing", "Borrowing History"]
@@ -176,7 +183,7 @@ def start_main_app():
     tabview.set("Books")
 
     ### Books Tab
-    books_tree_columns = ("Book ID", "Title", "Author", "Genre", "Year Published", "Quantity")
+    books_tree_columns = ("Book ID", "Title", "Author", "Genre", "Year Published", "Quantity", "Language", "Page Number")
     books_tree = ttk.Treeview(tabview.tab("Books"), columns=books_tree_columns, show="headings", selectmode="browse")
     books_tree.pack(fill="both", expand=True)
 
@@ -193,8 +200,9 @@ def start_main_app():
 
     def open_add_book_window():
         add_book_window = Toplevel(main_app)
+
         add_book_window.title("Add Book")
-        add_book_window.geometry("400x400")
+        add_book_window.geometry("400x700")
 
         book_id_label = Label(add_book_window, text="Book ID")
         book_id_label.pack(pady=5)
@@ -226,6 +234,16 @@ def start_main_app():
         quantity_entry = Entry(add_book_window)
         quantity_entry.pack(pady=5)
 
+        language_label = Label(add_book_window, text="Language")
+        language_label.pack(pady=5)
+        language_entry = Entry(add_book_window)
+        language_entry.pack(pady=5)
+
+        page_number_label = Label(add_book_window, text="Page Number")
+        page_number_label.pack(pady=5)
+        page_number_entry = Entry(add_book_window)
+        page_number_entry.pack(pady=5)
+
         def add_book():
             book_id = book_id_entry.get()
             title = title_entry.get()
@@ -233,6 +251,8 @@ def start_main_app():
             genre = genre_entry.get()
             year_published = year_entry.get()
             quantity = quantity_entry.get()
+            language= language_entry.get()
+            page_number = page_number_entry.get()
 
             # Book ID formatını kontrol et
             if not book_id.startswith("BK"):
@@ -249,24 +269,48 @@ def start_main_app():
             if len(genre) < 3:
                 messagebox.showwarning("Invalid Genre", "Genre must contain at least 3 characters.")
                 return
+            if len(language) < 3:
+                messagebox.showwarning("Invalid language", "language must contain at least 3 characters.")
+                return
 
             # Year Published kontrolü (4 rakamlı sayı)
-            if not year_published.isdigit() or len(year_published) != 4:
+            if not year_published.isdigit() or len(year_published) != 4 or int(year_published)> 2025:
                 messagebox.showwarning("Invalid Year", "Year Published must be a 4-digit number.")
                 return
 
+            if not page_number.isdigit() or int(page_number) <= 0:
+                messagebox.showwarning("Invalid page number", "Year Published must be bigger than 0.")
+                return
+
+
             # Diğer alanların boş olup olmadığını kontrol et
-            if not all([book_id, title, author, genre, year_published, quantity]):
+            if not all([book_id, title, author, genre, year_published, quantity, language, page_number]):
                 messagebox.showwarning("Input Error", "Please fill all fields.")
                 return
 
             try:
                 # Veritabanına ekleme işlemi
                 db_cursor.execute(insert_books_query,
-                                  (book_id, title, author, genre, int(year_published), int(quantity)))
+                                  (book_id, title, author, genre, int(year_published), int(quantity), language, int(page_number) ))
                 db_connection.commit()
                 refresh_books_tree()
                 messagebox.showinfo("Success", "Book added successfully!")
+
+                csv_file_path = "./data/Books.csv"
+                file_exists = os.path.isfile(csv_file_path)
+
+                with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.writer(csvfile)
+
+                    # Write the header if the file is new
+                    if not file_exists:
+                        writer.writerow(
+                            ['book_id', 'title', 'author', 'genre', 'year_published', 'quantity', 'language',
+                             'page_number'])
+
+                    # Append the new book
+                    writer.writerow([book_id, title, author, genre, year_published, quantity, language, page_number])
+
                 add_book_window.destroy()
             except Exception as e:
                 messagebox.showerror("Database Error", f"An error occurred: {e}")
