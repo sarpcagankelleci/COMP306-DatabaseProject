@@ -4,6 +4,7 @@ from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
 from tkcalendar import Calendar
+from datetime import date
 
 # Imports for database
 import mysql.connector
@@ -13,7 +14,7 @@ import csv
 db_connection = mysql.connector.connect(
     host="localhost",
     user="root",
-    passwd="ksu12345",
+    passwd="Fatura10*",
     auth_plugin='mysql_native_password'
 )
 db_cursor = db_connection.cursor(buffered=True)
@@ -70,6 +71,19 @@ db_cursor.execute("""
         FOREIGN KEY (member_id) REFERENCES Members(member_id)
     )
 """)
+
+db_cursor.execute("""
+    CREATE TABLE BorrowingHistory (
+        borrow_id INT AUTO_INCREMENT PRIMARY KEY,
+        book_id CHAR(6),
+        member_id CHAR(6),
+        borrow_date DATE,
+        return_date DATE,
+        FOREIGN KEY (book_id) REFERENCES Books(book_id),
+        FOREIGN KEY (member_id) REFERENCES Members(member_id)
+    )
+""")
+
 
 # Insert Admin Data
 db_cursor.execute("""
@@ -156,7 +170,7 @@ def start_main_app():
     tabview.pack(pady=20, padx=20, fill="both", expand=True)
 
     # Define Tabs
-    tabs = ["Books", "Members", "Borrowing"]
+    tabs = ["Books", "Members", "Borrowing", "Borrowing History"]
     for tab in tabs:
         tabview.add(tab)
     tabview.set("Books")
@@ -515,11 +529,70 @@ def start_main_app():
         refresh_borrowing_tree()
         messagebox.showinfo("Success", f"Borrowing record with ID {borrow_id} has been deleted.")
 
+    def return_book():
+        selected_item = borrowing_tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Selection Error", "No borrowing record selected.")
+            return
+
+        borrow_id = borrowing_tree.item(selected_item, 'values')[0]  # Get the selected borrow ID
+        db_cursor.execute("SELECT * FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
+        borrow_record = db_cursor.fetchone() # Set borrow_record as tuple borrowing tuple
+
+        if not borrow_record:
+            messagebox.showerror("Error", "Borrowing record not found.")
+            return
+
+        book_id, member_id, borrow_date, _ = borrow_record[1:]  # Extract record details
+
+        # Move record to BorrowingHistory with current date as return_date
+        db_cursor.execute("""
+            INSERT INTO BorrowingHistory (book_id, member_id, borrow_date, return_date)
+            VALUES (%s, %s, %s, %s)
+        """, (book_id, member_id, borrow_date, date.today()))
+
+        # Delete record from Borrowing
+        db_cursor.execute("DELETE FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
+
+        # Update book quantity
+        db_cursor.execute("""
+            UPDATE Books SET quantity = quantity + 1 WHERE book_id = %s
+        """, (book_id,))
+
+        # Commit changes
+        db_connection.commit()
+        refresh_borrowing_tree()  # Refresh Borrowing tab
+        refresh_borrowing_history_tree()  # Refresh Borrowing History tab
+        refresh_books_tree()  # Update book quantities in Books tab
+
+        messagebox.showinfo("Success", "Book returned successfully!")
+
     add_borrowing_button = Button(tabview.tab("Borrowing"), text="Add Borrowing", command=open_add_borrowing_window)
     add_borrowing_button.pack(pady=5)
 
     delete_borrowing_button = Button(tabview.tab("Borrowing"), text="Delete Borrowing", command=delete_borrowing)
     delete_borrowing_button.pack(pady=5)
+
+    return_book_button = Button(tabview.tab("Borrowing"), text="Return Book", command=return_book)
+    return_book_button.pack(pady=5)
+
+    borrowing_history_tree_columns = ("Borrow ID", "Book ID", "Member ID", "Borrow Date", "Return Date")
+    borrowing_history_tree = ttk.Treeview(tabview.tab("Borrowing History"),
+                                          columns=borrowing_history_tree_columns,
+                                          show="headings",
+                                          selectmode="browse")
+    borrowing_history_tree.pack(fill="both", expand=True)
+
+    for col in borrowing_history_tree_columns:
+        borrowing_history_tree.heading(col, text=col)
+
+    def refresh_borrowing_history_tree():
+        borrowing_history_tree.delete(*borrowing_history_tree.get_children())  # Clear current data
+        db_cursor.execute("SELECT * FROM BorrowingHistory")
+        for history in db_cursor.fetchall():
+            borrowing_history_tree.insert("", END, values=history)
+
+    refresh_borrowing_history_tree()
 
     main_app.mainloop()
 
