@@ -14,7 +14,7 @@ import csv
 db_connection = mysql.connector.connect(
     host="localhost",
     user="root",
-    passwd="Fatura10*",
+    passwd="Emsalinur12345",
     auth_plugin='mysql_native_password'
 )
 db_cursor = db_connection.cursor(buffered=True)
@@ -292,6 +292,84 @@ def start_main_app():
     delete_book_button = Button(tabview.tab("Books"), text="Delete Book", command=delete_book)
     delete_book_button.pack(pady=5)
 
+    ### Search Books Feature
+    def search_books():
+        # Yeni bir pencere oluştur
+        search_window = Toplevel(main_app)
+        search_window.title("Search Books")
+        search_window.geometry("400x400")
+
+        # Kitap arama kriterleri için label ve entry bölümleri
+        title_label = Label(search_window, text="Title")
+        title_label.pack(pady=5)
+        title_entry = Entry(search_window)
+        title_entry.pack(pady=5)
+
+        author_label = Label(search_window, text="Author")
+        author_label.pack(pady=5)
+        author_entry = Entry(search_window)
+        author_entry.pack(pady=5)
+
+        genre_label = Label(search_window, text="Genre")
+        genre_label.pack(pady=5)
+        genre_entry = Entry(search_window)
+        genre_entry.pack(pady=5)
+
+        year_label = Label(search_window, text="Year Published")
+        year_label.pack(pady=5)
+        year_entry = Entry(search_window)
+        year_entry.pack(pady=5)
+
+        # Arama Fonkisyonu
+        def perform_search():
+            # Kullanıcı kriterlerini oku
+            title = title_entry.get()
+            author = author_entry.get()
+            genre = genre_entry.get()
+            year_published = year_entry.get()
+
+            # Dinamik SQL Query oluştur
+            query = "SELECT * FROM Books WHERE 1=1"
+            params = []
+
+            if title:
+                query += " AND title LIKE %s"
+                params.append(f"%{title}%")
+            if author:
+                query += " AND author LIKE %s"
+                params.append(f"%{author}%")
+            if genre:
+                query += " AND genre LIKE %s"
+                params.append(f"%{genre}%")
+            if year_published:
+                if year_published.isdigit():
+                    query += " AND year_published = %s"
+                    params.append(year_published)
+                else:
+                    messagebox.showwarning("Input Error", "Year Published should be a number.")
+                    return
+
+            # Veritabanında sorguyu çalıştır ve kitap ağacını güncelle
+            db_cursor.execute(query, tuple(params))
+            results = db_cursor.fetchall()
+
+            # Mevcut tabloda sonuçları göster
+            books_tree.delete(*books_tree.get_children())
+            for book in results:
+                books_tree.insert("", END, values=book)
+
+            # Kullanıcıya bilgi ver
+            messagebox.showinfo("Search Complete", f"{len(results)} results found.")
+            search_window.destroy()
+
+        # Arama butonu
+        search_button = Button(search_window, text="Search", command=perform_search)
+        search_button.pack(pady=20)
+
+    # Search Books Button
+    search_books_button = Button(tabview.tab("Books"), text="Search Books", command=search_books)
+    search_books_button.pack(pady=5)
+
     ### Members Tab
     members_tree_columns = ("Member ID", "First Name", "Last Name", "Phone Number", "Email")
     members_tree = ttk.Treeview(tabview.tab("Members"), columns=members_tree_columns, show="headings", selectmode="browse")
@@ -299,6 +377,7 @@ def start_main_app():
 
     for col in members_tree_columns:
         members_tree.heading(col, text=col)
+
 
     def refresh_members_tree():
         members_tree.delete(*members_tree.get_children())
