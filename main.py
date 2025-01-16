@@ -19,7 +19,7 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="ksu12345",
+  passwd="faruk123",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
@@ -805,8 +805,9 @@ def start_main_app():
     return_book_button.pack(pady=5)
 
     # Borrowing History Tab
+    # Borrowing History Tab
     borrowing_history_tree_columns = (
-    "Borrow ID", "Book ID", "Member ID", "Borrow Date", "Planned Return Date", "Actual Return Date")
+        "Borrow ID", "Book ID", "Member ID", "Borrow Date", "Planned Return Date", "Actual Return Date", "Fine ($)")
     borrowing_history_tree = ttk.Treeview(
         tabview.tab("Borrowing History"),
         columns=borrowing_history_tree_columns,
@@ -820,7 +821,8 @@ def start_main_app():
 
     def refresh_borrowing_history_tree():
         """
-        Refreshes the Borrowing History tab with all records where actual_return_date is NOT NULL.
+        Refreshes the Borrowing History tab with all records where actual_return_date is NOT NULL,
+        and calculates the fine dynamically for late returns.
         """
         borrowing_history_tree.delete(*borrowing_history_tree.get_children())  # Clear current data
 
@@ -835,16 +837,23 @@ def start_main_app():
         for borrowing in borrowing_data:
             borrow_id, book_id, member_id, borrow_date, planned_return_date, actual_return_date = borrowing
             actual_return_date_obj = datetime.strptime(str(actual_return_date), "%Y-%m-%d").date()
+            planned_return_date_obj = datetime.strptime(str(planned_return_date), "%Y-%m-%d").date()
 
-            # Determine the color
-            current_date = datetime.now().date()
-            if actual_return_date_obj > planned_return_date:
-                row_color = "red"  # Late return
-            elif actual_return_date_obj <= planned_return_date:
-                row_color = "green"  # Returned on time
+            # Calculate fine if the book was returned late
+            fine = 0
+            if actual_return_date_obj > planned_return_date_obj:
+                fine = (actual_return_date_obj - planned_return_date_obj).days  # $1 for each late day
 
-            # Insert row with a specific tag for color
-            borrowing_history_tree.insert("", END, values=borrowing, tags=(row_color,))
+            # Determine the color for late or on-time returns
+            row_color = "red" if fine > 0 else "green"
+
+            # Insert row into the treeview with the calculated fine
+            borrowing_history_tree.insert(
+                "",
+                END,
+                values=(borrow_id, book_id, member_id, borrow_date, planned_return_date, actual_return_date, fine),
+                tags=(row_color,)
+            )
 
         # Configure row colors based on tags
         borrowing_history_tree.tag_configure("green", background="lightgreen", foreground="black")
@@ -855,7 +864,8 @@ def start_main_app():
         tabview.tab("Borrowing History"),
         text="Color Codes:\n"
              "Green: Returned on or before the planned return date.\n"
-             "Red: Returned late.",
+             "Red: Returned late.\n"
+             "Fine ($): Calculated dynamically as $1 per late day.",
         font=("Arial", 10),
         justify="left",
         fg="black"
@@ -863,29 +873,36 @@ def start_main_app():
     history_explanation_label.pack(pady=10, anchor="w")
 
     refresh_borrowing_history_tree()
-    ### Analytics Tab
+
     def refresh_analytics_tab():
         """
-        Refreshes the analytics tab with updated visualizations:
-        1. Borrowed Book Statistics (Pie Chart)
-        2. Top 5 Most Borrowed Books (Bar Chart)
-        3. Books Borrowed by Members (Bar Chart)
-        4. Most Borrowed Genres
+        Refreshes the analytics tab with updated visualizations in a scrollable frame, with each graphic properly centered.
         """
         # Clear the current content
         for widget in tabview.tab("Analytics").winfo_children():
             widget.destroy()
 
-        analytics_frame = Frame(tabview.tab("Analytics"))
-        analytics_frame.pack(fill="both", expand=True)
+        # Create a Canvas for scrolling
+        canvas = Canvas(tabview.tab("Analytics"))
+        canvas.pack(side=LEFT, fill=BOTH, expand=True)
 
-        # Layout grid configuration
-        analytics_frame.grid_rowconfigure(0, weight=1)
-        analytics_frame.grid_rowconfigure(1, weight=1)
-        analytics_frame.grid_columnconfigure(0, weight=1)
-        analytics_frame.grid_columnconfigure(1, weight=1)
+        # Add a vertical scrollbar to the canvas
+        scrollbar = Scrollbar(tabview.tab("Analytics"), orient=VERTICAL, command=canvas.yview)
+        scrollbar.pack(side=RIGHT, fill=Y)
 
-        ### Query 1: Borrowed Book Statistics ###
+        # Configure the canvas for scrolling
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        # Create a frame inside the canvas to hold the content
+        content_frame = Frame(canvas)
+        canvas.create_window((0, 0), window=content_frame, anchor="nw")
+
+        # Ensure the content_frame uses a grid layout
+        content_frame.columnconfigure(0, weight=1)
+
+        ### Add Visualizations to the Content Frame ###
+        # Borrowed Book Statistics
         db_cursor.execute("""
             SELECT genre, COUNT(*) AS borrow_count
             FROM Borrowing
@@ -896,14 +913,16 @@ def start_main_app():
 
         if genre_data:
             genres, counts = zip(*genre_data)
-            fig1, ax1 = plt.subplots(figsize=(4, 3))
-            ax1.pie(counts, labels=genres, autopct="%1.1f%%", startangle=90)
-            ax1.set_title("Borrowed Book Statistics", fontsize=10)
+            fig1, ax1 = plt.subplots(figsize=(10, 10))  # Larger size
+            ax1.pie(counts, labels=genres, autopct="%1.1f%%", startangle=90, textprops={'fontsize': 10})
+            ax1.set_title("Borrowed Book Statistics", fontsize=16)
 
-            canvas1 = FigureCanvasTkAgg(fig1, master=analytics_frame)
-            canvas1.get_tk_widget().grid(row=0, column=0, padx=20, pady=20)
+            canvas1 = FigureCanvasTkAgg(fig1, master=content_frame)
+            widget1 = canvas1.get_tk_widget()
+            widget1.grid(row=0, column=0, pady=20, sticky="nsew")  # Centered
 
-        ### Query 2: Top 5 Most Borrowed Books ###
+        # Top 5 Most Borrowed Books
+        # Top 5 Most Borrowed Books
         db_cursor.execute("""
             SELECT Books.title, COUNT(*) AS borrow_count
             FROM Borrowing
@@ -916,16 +935,35 @@ def start_main_app():
 
         if most_borrowed_data:
             titles, borrow_counts = zip(*most_borrowed_data)
-            fig2, ax2 = plt.subplots(figsize=(4, 3))
+            fig2, ax2 = plt.subplots(figsize=(10, 7))  # Larger size
+
+            # Horizontal bar chart
             ax2.barh(titles, borrow_counts, color="lightblue")
-            ax2.set_xlabel("Borrow Count")
-            ax2.set_title("Top 5 Most Borrowed Books", fontsize=10)
+
+            # Adjust x-axis and y-axis labels
+            ax2.set_xlabel("Borrow Count", fontsize=12)
+            ax2.set_title("Top 5 Most Borrowed Books", fontsize=16)
+
+            # Increase margin to add space to the left of the y-axis labels
+            ax2.margins(y=0.2)
+
+            # Adjust tick label alignment and set a larger font size for better visibility
+            ax2.tick_params(axis='y', labelsize=12, pad=10)  # 'pad' moves the labels to the right
+            ax2.tick_params(axis='x', labelsize=10)
+
+            # Invert the y-axis to keep the order
             ax2.invert_yaxis()
 
-            canvas2 = FigureCanvasTkAgg(fig2, master=analytics_frame)
-            canvas2.get_tk_widget().grid(row=0, column=1, padx=20, pady=20)
+            # Use tight_layout to ensure the layout fits the labels
+            fig2.tight_layout()
 
-        ### Query 3: Books Borrowed by Members ###
+            # Render the chart on the Tkinter canvas
+            canvas2 = FigureCanvasTkAgg(fig2, master=content_frame)
+            widget2 = canvas2.get_tk_widget()
+            widget2.grid(row=1, column=0, pady=20, sticky="nsew")  # Centered
+
+
+     # Books Borrowed by Members
         db_cursor.execute("""
             SELECT CONCAT(Members.first_name, ' ', Members.last_name) AS member_name, COUNT(*) AS borrow_count
             FROM Borrowing
@@ -937,16 +975,19 @@ def start_main_app():
 
         if member_borrow_data:
             member_names, borrow_counts = zip(*member_borrow_data)
-            fig3, ax3 = plt.subplots(figsize=(4, 3))
+            fig3, ax3 = plt.subplots(figsize=(10, 12))  # Larger size
             ax3.bar(member_names, borrow_counts, color="lightgreen")
-            ax3.set_xlabel("Members")
-            ax3.set_ylabel("Borrow Count")
-            ax3.set_title("Books Borrowed by Members", fontsize=10)
+            ax3.set_xlabel("Members", fontsize=12)
+            ax3.set_ylabel("Borrow Count", fontsize=12)
+            ax3.set_title("Books Borrowed by Members", fontsize=16)
+            ax3.tick_params(axis='x', labelsize=10, rotation=45)  # Rotate for readability
+            ax3.tick_params(axis='y', labelsize=10)
 
-            canvas3 = FigureCanvasTkAgg(fig3, master=analytics_frame)
-            canvas3.get_tk_widget().grid(row=1, column=0, padx=20, pady=20)
+            canvas3 = FigureCanvasTkAgg(fig3, master=content_frame)
+            widget3 = canvas3.get_tk_widget()
+            widget3.grid(row=2, column=0, pady=20, sticky="nsew")  # Centered
 
-        ### Query 4: Most Borrowed Genres ###
+        # Most Borrowed Genres
         db_cursor.execute("""
             SELECT Books.genre, COUNT(*) AS borrow_count
             FROM Borrowing
@@ -958,21 +999,22 @@ def start_main_app():
 
         if genre_borrow_data:
             genres, borrow_counts = zip(*genre_borrow_data)
-            fig4, ax4 = plt.subplots(figsize=(4, 3))
+            fig4, ax4 = plt.subplots(figsize=(10, 12))  # Larger size
             ax4.bar(genres, borrow_counts, color="orange")
-            ax4.set_xlabel("Genre")
-            ax4.set_ylabel("Borrow Count")
-            ax4.set_title("Most Borrowed Genres", fontsize=10)
-            ax4.tick_params(axis='x', rotation=45)  # Rotate x-axis labels for better visibility
+            ax4.set_xlabel("Genre", fontsize=12)
+            ax4.set_ylabel("Borrow Count", fontsize=12)
+            ax4.set_title("Most Borrowed Genres", fontsize=16)
+            ax4.tick_params(axis='x', labelsize=10, rotation=45)  # Rotate x-axis labels for better visibility
+            ax4.tick_params(axis='y', labelsize=10)
 
-            canvas4 = FigureCanvasTkAgg(fig4, master=analytics_frame)
-            canvas4.get_tk_widget().grid(row=1, column=1, padx=20, pady=20)
+            canvas4 = FigureCanvasTkAgg(fig4, master=content_frame)
+            widget4 = canvas4.get_tk_widget()
+            widget4.grid(row=3, column=0, pady=20, sticky="nsew")  # Centered
 
-        canvas4 = FigureCanvasTkAgg(fig4, master=analytics_frame)
-        canvas4.get_tk_widget().grid(row=1, column=1, padx=20, pady=20)
+        # Add padding to the bottom of the content frame for spacing
+        Frame(content_frame, height=20).grid(row=4, column=0)
 
     refresh_analytics_tab()
-
     main_app.mainloop()
 def update_time_label(label):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
