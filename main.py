@@ -8,6 +8,8 @@ from tkinter import messagebox
 from tkcalendar import Calendar
 from datetime import date
 from datetime import datetime
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
 
 # Imports for database
 import mysql.connector
@@ -196,7 +198,7 @@ def start_main_app():
     tabview.pack(pady=10, padx=10, fill="both", expand=True)
 
     # Define Tabs
-    tabs = ["Books", "Members", "Borrowing", "Borrowing History"]
+    tabs = ["Books", "Members", "Borrowing", "Borrowing History", "Analytics"]
     for tab in tabs:
         tabview.add(tab)
     tabview.set("Books")
@@ -850,7 +852,104 @@ def start_main_app():
             borrowing_history_tree.insert("", END, values=history)
 
     refresh_borrowing_history_tree()
+    ### Analytics Tab
+    def refresh_analytics_tab():
+        """
+        Refreshes the analytics tab with four visualizations:
+        1. Borrowed Book Statistics (Top-left, Pie Chart)
+        2. Top 5 Most Borrowed Books (Top-right, Bar Chart)
+        3. Books Borrowed by Members (Bottom-left, Bar Chart)
+        4. Dummy Chart (Bottom-right, Pie Chart)
+        """
+        # Clear the current content
+        for widget in tabview.tab("Analytics").winfo_children():
+            widget.destroy()
 
+        analytics_frame = Frame(tabview.tab("Analytics"))
+        analytics_frame.pack(fill="both", expand=True)
+
+        # Layout grid configuration
+        analytics_frame.grid_rowconfigure(0, weight=1)
+        analytics_frame.grid_rowconfigure(1, weight=1)
+        analytics_frame.grid_columnconfigure(0, weight=1)
+        analytics_frame.grid_columnconfigure(1, weight=1)
+
+        ### Query 1: Borrowed Book Statistics ###
+        db_cursor.execute("""
+            SELECT genre, COUNT(*) AS count
+            FROM BorrowingHistory
+            INNER JOIN Books ON BorrowingHistory.book_id = Books.book_id
+            GROUP BY genre
+        """)
+        genre_data = db_cursor.fetchall()
+
+        if genre_data:
+            genres, counts = zip(*genre_data)
+            fig1, ax1 = plt.subplots(figsize=(4, 3))
+            ax1.pie(counts, labels=genres, autopct="%1.1f%%", startangle=90)
+            ax1.set_title("Borrowed Book Statistics", fontsize=10)
+
+            canvas1 = FigureCanvasTkAgg(fig1, master=analytics_frame)
+            canvas1.get_tk_widget().grid(row=0, column=0, padx=20, pady=20)
+
+        ### Query 2: Top 5 Most Borrowed Books ###
+        db_cursor.execute("""
+            SELECT title, COUNT(*) AS count
+            FROM BorrowingHistory
+            INNER JOIN Books ON BorrowingHistory.book_id = Books.book_id
+            GROUP BY title
+            ORDER BY count DESC
+            LIMIT 5
+        """)
+        top_books_data = db_cursor.fetchall()
+
+        if top_books_data:
+            titles, counts = zip(*top_books_data)
+            fig2, ax2 = plt.subplots(figsize=(4, 3))
+            ax2.barh(titles, counts, color="skyblue")
+            ax2.set_xlabel("Number of Times Borrowed")
+            ax2.set_title("Top 5 Most Borrowed Books", fontsize=10)
+            ax2.invert_yaxis()
+
+            canvas2 = FigureCanvasTkAgg(fig2, master=analytics_frame)
+            canvas2.get_tk_widget().grid(row=0, column=1, padx=20, pady=20)
+
+        ### Query 3: Books Borrowed by Members ###
+        db_cursor.execute("""
+            SELECT CONCAT(first_name, ' ', last_name) AS member_name, COUNT(*) AS count
+            FROM BorrowingHistory
+            INNER JOIN Members ON BorrowingHistory.member_id = Members.member_id
+            GROUP BY member_name
+            ORDER BY count DESC
+            LIMIT 5
+        """)
+        members_data = db_cursor.fetchall()
+
+        if members_data:
+            member_names, borrow_counts = zip(*members_data)
+            fig3, ax3 = plt.subplots(figsize=(4, 3))
+            ax3.bar(member_names, borrow_counts, color="lightgreen")
+            ax3.set_xlabel("Members")
+            ax3.set_ylabel("Books Borrowed")
+            ax3.set_title("Books Borrowed by Members", fontsize=10)
+
+            canvas3 = FigureCanvasTkAgg(fig3, master=analytics_frame)
+            canvas3.get_tk_widget().grid(row=1, column=0, padx=20, pady=20)
+
+        ### Dummy Chart: Bottom-right ###
+        labels = ["Category A", "Category B", "Category C"]
+        sizes = [40, 30, 30]
+        colors = ["gold", "lightcoral", "lightskyblue"]
+
+        fig4, ax4 = plt.subplots(figsize=(4, 3))
+        ax4.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90, colors=colors)
+        ax4.set_title("Dummy Chart Example", fontsize=10)
+
+        canvas4 = FigureCanvasTkAgg(fig4, master=analytics_frame)
+        canvas4.get_tk_widget().grid(row=1, column=1, padx=20, pady=20)
+
+    # Refresh Analytics when the tab is first loaded
+    refresh_analytics_tab()
 
     main_app.mainloop()
 def update_time_label(label):
