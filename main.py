@@ -201,8 +201,9 @@ def start_main_app():
         tabview.add(tab)
     tabview.set("Books")
 
-    ### Books Tab
-    books_tree_columns = ("Book ID", "Title", "Author", "Genre", "Year Published", "Quantity", "Language", "Page Number")
+    # Books Tab
+    books_tree_columns = (
+    "Book ID", "Title", "Author", "Genre", "Year Published", "Quantity", "Language", "Page Number")
     books_tree = ttk.Treeview(tabview.tab("Books"), columns=books_tree_columns, show="headings", selectmode="browse")
     books_tree.pack(fill="both", expand=True)
 
@@ -354,6 +355,138 @@ def start_main_app():
 
     delete_book_button = Button(tabview.tab("Books"), text="Delete Book", command=delete_book)
     delete_book_button.pack(pady=5)
+
+    def open_category_filter_window():
+        """
+        Opens a new window to allow filtering books by their genre/category and adds a reset button.
+        """
+        filter_window = Toplevel(main_app)
+        filter_window.title("Category Filter")
+        filter_window.geometry("400x300")
+
+        # Fetch distinct categories
+        db_cursor.execute("SELECT DISTINCT genre FROM Books")
+        categories = [row[0] for row in db_cursor.fetchall()]
+
+        if not categories:
+            messagebox.showinfo("No Categories", "No categories found in the database.")
+            filter_window.destroy()
+            return
+
+        # Dropdown for category selection
+        category_label = Label(filter_window, text="Select Category:")
+        category_label.pack(pady=10)
+
+        category_combo = ttk.Combobox(filter_window, values=categories, state="readonly")
+        category_combo.pack(pady=10)
+
+        def filter_books_by_category():
+            selected_category = category_combo.get()
+            if not selected_category:
+                messagebox.showwarning("Input Error", "Please select a category.")
+                return
+
+            # Refresh Books Tree with filtered data
+            books_tree.delete(*books_tree.get_children())
+            db_cursor.execute("SELECT * FROM Books WHERE genre = %s", (selected_category,))
+            filtered_books = db_cursor.fetchall()
+
+            if not filtered_books:
+                messagebox.showinfo("No Results", f"No books found in the category '{selected_category}'.")
+            else:
+                for book in filtered_books:
+                    books_tree.insert("", END, values=book)
+
+            filter_window.destroy()
+
+        def reset_books_table():
+            """
+            Resets the filter and loads all books into the Books Tree.
+            """
+            books_tree.delete(*books_tree.get_children())
+            db_cursor.execute("SELECT * FROM Books")
+            for book in db_cursor.fetchall():
+                books_tree.insert("", END, values=book)
+            filter_window.destroy()
+
+        # Filter Button
+        filter_button = Button(filter_window, text="Filter", command=filter_books_by_category)
+        filter_button.pack(pady=10)
+
+        # Reset Button
+        reset_button = Button(filter_window, text="Reset", command=reset_books_table)
+        reset_button.pack(pady=10)
+
+    # Add Category Filter Button to the Books Tab
+    category_filter_button = Button(tabview.tab("Books"), text="Category Filter", command=open_category_filter_window)
+    category_filter_button.pack(pady=5)
+
+    def open_sort_option_window():
+        """
+        Opens the first window to allow users to select the column to sort by.
+        """
+        sort_option_window = Toplevel(main_app)
+        sort_option_window.title("Sort Option")
+        sort_option_window.geometry("400x200")
+
+        # Instruction label
+        Label(sort_option_window, text="Select Sort Option:", font=("Arial", 12, "bold")).pack(pady=10)
+
+        # Sort options
+        sort_option_var = StringVar(value="Year Published")
+        Radiobutton(sort_option_window, text="Year Published", variable=sort_option_var, value="Year Published").pack(
+            pady=5)
+        Radiobutton(sort_option_window, text="Quantity", variable=sort_option_var, value="Quantity").pack(pady=5)
+
+        def open_sort_order_window():
+            """
+            Opens the second window to allow users to select the sort order and closes the first window.
+            """
+            # Close the first window
+            sort_option_window.destroy()
+
+            # Open the second window
+            sort_order_window = Toplevel(main_app)
+            sort_order_window.title("Sort Order")
+            sort_order_window.geometry("400x200")
+
+            # Instruction label
+            Label(sort_order_window, text="Choose Sort Order:", font=("Arial", 12, "bold")).pack(pady=10)
+
+            # Sort order options
+            sort_order_var = StringVar(value="Ascending")
+            Radiobutton(sort_order_window, text="Ascending", variable=sort_order_var, value="Ascending").pack(pady=5)
+            Radiobutton(sort_order_window, text="Descending", variable=sort_order_var, value="Descending").pack(pady=5)
+
+            def sort_books():
+                """
+                Sorts the books based on the selected column and order.
+                """
+                sort_option = sort_option_var.get()
+                sort_order = sort_order_var.get()
+
+                # Determine column name
+                column_name = "year_published" if sort_option == "Year Published" else "quantity"
+
+                # Construct and execute query
+                query = f"SELECT * FROM Books ORDER BY {column_name} {'ASC' if sort_order == 'Ascending' else 'DESC'}"
+                books_tree.delete(*books_tree.get_children())
+                db_cursor.execute(query)
+                for book in db_cursor.fetchall():
+                    books_tree.insert("", END, values=book)
+
+                # Close the sort order window
+                sort_order_window.destroy()
+
+            # Sort Button
+            Button(sort_order_window, text="Sort", command=sort_books).pack(pady=20)
+
+        # Next Button to open the sort order window
+        Button(sort_option_window, text="Next", command=open_sort_order_window).pack(pady=20)
+
+    # Add the Sort Button to the Books Tab
+    sort_button = Button(tabview.tab("Books"), text="Sort", command=open_sort_option_window)
+    sort_button.pack(pady=5)
 
     ### Members Tab
     members_tree_columns = ("Member ID", "First Name", "Last Name", "Phone Number", "Email")
