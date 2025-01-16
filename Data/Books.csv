@@ -1,3 +1,21 @@
 book_id,title,author,genre,year_published,quantity,language,page_number
-BK101,book1,author1,Genre1,2104,10,turkish,100
-BK2,book2,author2,genre2,2024,10,turkish,180
+BK101,The Eternal Journey,Elif Demir,Philosophy,2020,12,turkish,250
+BK202,Whispers of the Sea,Carla Montez,Romance,2018,8,spanish,320
+BK303,Code Revolution,James Carter,Technology,2023,15,english,400
+BK404,Shadows of Istanbul,Mehmet Yıldırım,Thriller,2015,20,turkish,280
+BK505,Beyond the Horizon,Sophia Laurent,Adventure,1999,5,french,310
+BK606,A Tale of Two Nations,Klaus Zimmermann,Historical Fiction,2020,10,german,350
+BK707,The Lost Symphony,Giovanni Ricci,Mystery,1985,9,italian,450
+BK808,Cooking Secrets,Isabel Fernández,Cookbook,2021,18,spanish,200
+BK909,Legends of the Amazon,Pedro Almeida,Fantasy,2012,7,portuguese,500
+BK1001,Samurai Chronicles,Haruto Tanaka,History,2000,25,japanese,420
+BK1102,The Algorithmic Mind,Dr. Alan Bates,Science,2023,10,english,370
+BK1203,Tales from Siberia,Olga Petrova,Folklore,2011,4,russian,230
+BK1304,Epic of the Aegean,Nazlı Özkan,Mythology,2005,6,turkish,410
+BK1405,The Forbidden Scrolls,Li Wei,Fantasy,1990,8,chinese,320
+BK1506,The Golden Sands,Omar Khaled,Adventure,2017,13,arabic,290
+BK1607,The Sacred Scripts,Ananya Gupta,Religion,1980,3,hindi,520
+BK1708,Into the Quantum Realm,Prof. Sarah Hill,Physics,2021,11,english,300
+BK1809,Desert Roses,Ahmed Mansoor,Drama,2016,14,arabic,360
+BK1901,The Viking Saga,Eirik Halvorsen,Historical Fiction,2014,7,norwegian,280
+BK2002,Modern Art Movements,Sylvia DuPont,Art,2019,12,french,340

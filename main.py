@@ -117,6 +117,19 @@ insert_members_query = """
 """
 populate_table("./data/Members.csv", insert_members_query)
 
+insert_borrowing_query = """
+    INSERT INTO Borrowing (borrow_id, book_id, member_id, borrow_date, return_date)
+    VALUES (%s, %s, %s, %s, %s)
+"""
+
+populate_table("./data/Borrowing.csv", insert_borrowing_query)
+
+insert_borrowing_history_query = """
+    INSERT INTO BorrowingHistory (borrow_id, book_id, member_id, borrow_date, return_date)
+    VALUES (%s, %s, %s, %s, %s)
+"""
+populate_table("./data/BorrowingHistory.csv", insert_borrowing_history_query)
+
 # Login Screen
 def login_screen():
     login_window = customtkinter.CTk()
@@ -438,11 +451,48 @@ def start_main_app():
 
     def refresh_borrowing_tree():
         borrowing_tree.delete(*borrowing_tree.get_children())  # Clear current data
-        db_cursor.execute("SELECT * FROM Borrowing")
-        for borrow in db_cursor.fetchall():
-            borrowing_tree.insert("", END, values=borrow)
+
+        # Fetch borrowing data from the database
+        db_cursor.execute("SELECT borrow_id, book_id, member_id, borrow_date, return_date FROM Borrowing")
+        borrowing_data = db_cursor.fetchall()
+
+        for borrowing in borrowing_data:
+            borrow_id, book_id, member_id, borrow_date, return_date = borrowing
+
+            # Compare return_date with current date
+            current_date = datetime.now().date()
+            return_date_obj = datetime.strptime(str(return_date), "%Y-%m-%d").date()
+
+            # Determine the color
+            if return_date_obj > current_date:
+                row_color = "green"  # Future return date
+            elif return_date_obj == current_date:
+                row_color = "yellow"  # Return date is today
+            else:
+                row_color = "red"  # Overdue return date
+
+            # Insert row with a specific tag for color
+            borrowing_tree.insert("", END, values=(borrow_id, book_id, member_id, borrow_date, return_date),
+                                  tags=(row_color,))
+
+        # Configure row colors based on tags
+        borrowing_tree.tag_configure("green", background="lightgreen", foreground="black")
+        borrowing_tree.tag_configure("yellow", background="lightyellow", foreground="black")
+        borrowing_tree.tag_configure("red", background="lightcoral", foreground="black")
 
     refresh_borrowing_tree()
+    # Add explanatory label for colors
+    explanation_label = Label(
+        tabview.tab("Borrowing"),
+        text="Color Codes:\n"
+             "Green: Return date is in the future.\n"
+             "Yellow: Return date is today.\n"
+             "Red: Return date has passed, the book has not been returned.",
+        font=("Arial", 10),
+        justify="left",
+        fg="black"
+    )
+    explanation_label.pack(pady=10, anchor="w")
 
     def open_add_borrowing_window():
         add_borrowing_window = Toplevel(main_app)
@@ -512,48 +562,54 @@ def start_main_app():
             borrow_date = borrow_date_calendar.get_date()
             return_date = return_date_calendar.get_date()
 
+            # Input validation
             if not book_id or not member_id or not borrow_date:
                 messagebox.showwarning("Input Error", "Please fill all required fields.")
                 return
 
-            # Check if the book exists and has a positive quantity
+            # Check book availability
             db_cursor.execute("SELECT quantity FROM Books WHERE book_id = %s", (book_id,))
             result = db_cursor.fetchone()
 
-            if result is None:
-                messagebox.showerror("Error", "Book not found.")
-                return
-
-            quantity = result[0]
-
-            if quantity <= 0:
-                messagebox.showwarning("Out of Stock", "The selected book is out of stock.")
+            if result is None or result[0] <= 0:
+                messagebox.showwarning("Error", "Book is not available.")
                 return
 
             try:
-                # Insert borrowing record
-                db_cursor.execute(
-                    "INSERT INTO Borrowing (book_id, member_id, borrow_date, return_date) VALUES (%s, %s, %s, %s)",
-                    (book_id, member_id, borrow_date, return_date)
-                )
+                # Get the next available borrow_id
+                db_cursor.execute("SELECT MAX(borrow_id) FROM Borrowing")
+                next_borrow_id = db_cursor.fetchone()[0]
+                if next_borrow_id is None:
+                    next_borrow_id = 1
+                else:
+                    next_borrow_id += 1
 
+                # Insert borrowing record into the database
+                db_cursor.execute(
+                    "INSERT INTO Borrowing (borrow_id, book_id, member_id, borrow_date, return_date) VALUES (%s, %s, %s, %s, %s)",
+                    (next_borrow_id, book_id, member_id, borrow_date, return_date)
+                )
                 # Update book quantity
-                db_cursor.execute(
-                    "UPDATE Books SET quantity = quantity - 1 WHERE book_id = %s AND quantity > 0",
-                    (book_id,)
-                )
-
-                # Commit changes
+                db_cursor.execute("UPDATE Books SET quantity = quantity - 1 WHERE book_id = %s", (book_id,))
                 db_connection.commit()
 
-                # Refresh borrowing tree
-                refresh_borrowing_tree()
-                refresh_books_tree()  # Books ekranını da güncelle
+                # Append the record to Borrowing.csv
+                csv_file_path = "./data/Borrowing.csv"
+                file_exists = os.path.isfile(csv_file_path)
+                with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.writer(csvfile)
+                    if not file_exists:
+                        writer.writerow(["borrow_id", "book_id", "member_id", "borrow_date", "return_date"])
+                    writer.writerow([next_borrow_id, book_id, member_id, borrow_date, return_date])
+
+                # Refresh the Borrowing and Books trees
+                refresh_borrowing_tree()  # Refresh Borrowing tab
+                refresh_books_tree()  # Refresh Books tab to update the quantity
 
                 messagebox.showinfo("Success", "Borrowing record added successfully!")
-                add_borrowing_window.destroy()
+                add_borrowing_window.destroy()  # Close the Add Borrowing window
             except Exception as e:
-                db_connection.rollback()
+                db_connection.rollback()  # Rollback changes in case of error
                 messagebox.showerror("Error", f"An error occurred: {e}")
 
         # Add Borrowing Button
@@ -587,36 +643,53 @@ def start_main_app():
 
         borrow_id = borrowing_tree.item(selected_item, 'values')[0]  # Get the selected borrow ID
         db_cursor.execute("SELECT * FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
-        borrow_record = db_cursor.fetchone() # Set borrow_record as tuple borrowing tuple
+        borrow_record = db_cursor.fetchone()  # Set borrow_record as tuple borrowing tuple
 
         if not borrow_record:
             messagebox.showerror("Error", "Borrowing record not found.")
             return
 
-        book_id, member_id, borrow_date, _ = borrow_record[1:]  # Extract record details
+        # Extract record details
+        book_id, member_id, borrow_date, _ = borrow_record[1:]
 
-        # Move record to BorrowingHistory with current date as return_date
-        db_cursor.execute("""
-            INSERT INTO BorrowingHistory (book_id, member_id, borrow_date, return_date)
-            VALUES (%s, %s, %s, %s)
-        """, (book_id, member_id, borrow_date, date.today()))
+        try:
+            # Move record to BorrowingHistory with current date as return_date
+            db_cursor.execute("""
+                INSERT INTO BorrowingHistory (borrow_id, book_id, member_id, borrow_date, return_date)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (borrow_id, book_id, member_id, borrow_date, date.today()))
 
-        # Delete record from Borrowing
-        db_cursor.execute("DELETE FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
+            # Delete record from Borrowing
+            db_cursor.execute("DELETE FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
 
-        # Update book quantity
-        db_cursor.execute("""
-            UPDATE Books SET quantity = quantity + 1 WHERE book_id = %s
-        """, (book_id,))
+            # Update book quantity
+            db_cursor.execute("""
+                UPDATE Books SET quantity = quantity + 1 WHERE book_id = %s
+            """, (book_id,))
 
-        # Commit changes
-        db_connection.commit()
-        refresh_borrowing_tree()  # Refresh Borrowing tab
-        refresh_borrowing_history_tree()  # Refresh Borrowing History tab
-        refresh_books_tree()  # Update book quantities in Books tab
+            # Commit changes
+            db_connection.commit()
 
-        messagebox.showinfo("Success", "Book returned successfully!")
+            # Refresh UI
+            refresh_borrowing_tree()  # Refresh Borrowing tab
+            refresh_borrowing_history_tree()  # Refresh Borrowing History tab
+            refresh_books_tree()  # Update book quantities in Books tab
 
+            # Update BorrowingHistory CSV
+            csv_file_path = "./data/BorrowingHistory.csv"
+            file_exists = os.path.isfile(csv_file_path)
+            with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                if not file_exists:
+                    writer.writerow(["borrow_id", "book_id", "member_id", "borrow_date", "return_date"])  # Write header
+                writer.writerow([borrow_id, book_id, member_id, borrow_date, date.today()])  # Append new record
+
+            messagebox.showinfo("Success", "Book returned successfully!")
+        except Exception as e:
+            db_connection.rollback()  # Rollback changes in case of error
+            messagebox.showerror("Error", f"An error occurred: {e}")
+
+    # Add Buttons to Borrowing Tab
     add_borrowing_button = Button(tabview.tab("Borrowing"), text="Add Borrowing", command=open_add_borrowing_window)
     add_borrowing_button.pack(pady=5)
 
@@ -626,6 +699,7 @@ def start_main_app():
     return_book_button = Button(tabview.tab("Borrowing"), text="Return Book", command=return_book)
     return_book_button.pack(pady=5)
 
+    # Borrowing History Tab
     borrowing_history_tree_columns = ("Borrow ID", "Book ID", "Member ID", "Borrow Date", "Return Date")
     borrowing_history_tree = ttk.Treeview(tabview.tab("Borrowing History"),
                                           columns=borrowing_history_tree_columns,
@@ -643,6 +717,7 @@ def start_main_app():
             borrowing_history_tree.insert("", END, values=history)
 
     refresh_borrowing_history_tree()
+
 
     main_app.mainloop()
 def update_time_label(label):
