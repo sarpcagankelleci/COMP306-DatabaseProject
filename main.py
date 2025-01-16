@@ -31,6 +31,8 @@ def populate_table(file_path, insert_query):
         reader = csv.reader(file)
         next(reader)  # Skip header
         for row in reader:
+            # Convert 'NULL' strings to Python None
+            row = [None if value == 'NULL' else value for value in row]
             db_cursor.execute(insert_query, row)
     db_connection.commit()
 
@@ -42,6 +44,8 @@ db_cursor.execute("CREATE DATABASE IF NOT EXISTS library")
 db_cursor.execute("USE library")
 
 # Create Tables
+db_cursor.execute("DROP TABLE IF EXISTS BorrowingHistory")
+
 db_cursor.execute("""
     CREATE TABLE Admins (
         admin_id CHAR(6) PRIMARY KEY,
@@ -70,29 +74,20 @@ db_cursor.execute("""
         email VARCHAR(50)
     )
 """)
+# Create Borrowing Table
 db_cursor.execute("""
     CREATE TABLE Borrowing (
         borrow_id INT AUTO_INCREMENT PRIMARY KEY,
         book_id CHAR(6),
         member_id CHAR(6),
         borrow_date DATE,
-        return_date DATE,
+        planned_return_date DATE,
+        actual_return_date DATE,
         FOREIGN KEY (book_id) REFERENCES Books(book_id),
         FOREIGN KEY (member_id) REFERENCES Members(member_id)
     )
 """)
 
-db_cursor.execute("""
-    CREATE TABLE BorrowingHistory (
-        borrow_id INT AUTO_INCREMENT PRIMARY KEY,
-        book_id CHAR(6),
-        member_id CHAR(6),
-        borrow_date DATE,
-        return_date DATE,
-        FOREIGN KEY (book_id) REFERENCES Books(book_id),
-        FOREIGN KEY (member_id) REFERENCES Members(member_id)
-    )
-""")
 
 
 # Insert Admin Data
@@ -120,17 +115,13 @@ insert_members_query = """
 populate_table("./data/Members.csv", insert_members_query)
 
 insert_borrowing_query = """
-    INSERT INTO Borrowing (borrow_id, book_id, member_id, borrow_date, return_date)
-    VALUES (%s, %s, %s, %s, %s)
+    INSERT INTO Borrowing (borrow_id, book_id, member_id, borrow_date, planned_return_date, actual_return_date)
+    VALUES (%s, %s, %s, %s, %s, %s)
 """
+
 
 populate_table("./data/Borrowing.csv", insert_borrowing_query)
 
-insert_borrowing_history_query = """
-    INSERT INTO BorrowingHistory (borrow_id, book_id, member_id, borrow_date, return_date)
-    VALUES (%s, %s, %s, %s, %s)
-"""
-populate_table("./data/BorrowingHistory.csv", insert_borrowing_history_query)
 
 # Login Screen
 def login_screen():
@@ -585,35 +576,45 @@ def start_main_app():
         borrowing_tree.heading(col, text=col)
 
     def refresh_borrowing_tree():
+        """
+        Refreshes the Borrowing tab to show only books that have not been returned.
+        Color-coded rows:
+        - Red: Overdue and not returned
+        - Yellow: Due today
+        - Green: Not yet due
+        """
         borrowing_tree.delete(*borrowing_tree.get_children())  # Clear current data
 
-        # Fetch borrowing data from the database
-        db_cursor.execute("SELECT borrow_id, book_id, member_id, borrow_date, return_date FROM Borrowing")
+        # Fetch borrowing data where actual_return_date is NULL
+        db_cursor.execute("""
+            SELECT borrow_id, book_id, member_id, borrow_date, planned_return_date 
+            FROM Borrowing
+            WHERE actual_return_date IS NULL
+        """)
         borrowing_data = db_cursor.fetchall()
 
+        current_date = datetime.now().date()
+
         for borrowing in borrowing_data:
-            borrow_id, book_id, member_id, borrow_date, return_date = borrowing
+            borrow_id, book_id, member_id, borrow_date, planned_return_date = borrowing
 
-            # Compare return_date with current date
-            current_date = datetime.now().date()
-            return_date_obj = datetime.strptime(str(return_date), "%Y-%m-%d").date()
+            # Determine the color for the row
+            planned_return_date_obj = datetime.strptime(str(planned_return_date), "%Y-%m-%d").date()
+            if current_date > planned_return_date_obj:  # Overdue
+                tag = "overdue"
+            elif current_date == planned_return_date_obj:  # Due today
+                tag = "due_today"
+            else:  # Not overdue
+                tag = "not_due"
 
-            # Determine the color
-            if return_date_obj > current_date:
-                row_color = "green"  # Future return date
-            elif return_date_obj == current_date:
-                row_color = "yellow"  # Return date is today
-            else:
-                row_color = "red"  # Overdue return date
+            # Insert the row into the treeview with the determined tag
+            borrowing_tree.insert("", END, values=(borrow_id, book_id, member_id, borrow_date, planned_return_date),
+                                  tags=(tag,))
 
-            # Insert row with a specific tag for color
-            borrowing_tree.insert("", END, values=(borrow_id, book_id, member_id, borrow_date, return_date),
-                                  tags=(row_color,))
-
-        # Configure row colors based on tags
-        borrowing_tree.tag_configure("green", background="lightgreen", foreground="black")
-        borrowing_tree.tag_configure("yellow", background="lightyellow", foreground="black")
-        borrowing_tree.tag_configure("red", background="lightcoral", foreground="black")
+        # Configure tags for color coding
+        borrowing_tree.tag_configure("overdue", background="lightcoral", foreground="black")  # Red for overdue
+        borrowing_tree.tag_configure("due_today", background="lightyellow", foreground="black")  # Yellow for today
+        borrowing_tree.tag_configure("not_due", background="lightgreen", foreground="black")  # Green for future
 
     refresh_borrowing_tree()
     # Add explanatory label for colors
@@ -633,7 +634,7 @@ def start_main_app():
         add_borrowing_window = Toplevel(main_app)
         add_borrowing_window.title("Add Borrowing Record")
         add_borrowing_window.geometry("450x550")
-        add_borrowing_window.configure(bg="#f5f5f5")  # Arka plan rengi
+        add_borrowing_window.configure(bg="#f5f5f5")  # Background color
 
         # Fetch Book IDs and Member IDs for dropdowns
         db_cursor.execute("SELECT book_id FROM Books WHERE quantity > 0")
@@ -672,8 +673,9 @@ def start_main_app():
         )
         borrow_date_calendar.pack(pady=10)
 
-        # Return Date Calendar
-        return_date_label = Label(add_borrowing_window, text="Return Date", bg="#f5f5f5", font=("Arial", 12, "bold"))
+        # Planned Return Date Calendar
+        return_date_label = Label(add_borrowing_window, text="Planned Return Date", bg="#f5f5f5",
+                                  font=("Arial", 12, "bold"))
         return_date_label.pack(pady=5)
         return_date_calendar = Calendar(
             add_borrowing_window,
@@ -695,10 +697,10 @@ def start_main_app():
             book_id = book_id_combo.get()
             member_id = member_id_combo.get()
             borrow_date = borrow_date_calendar.get_date()
-            return_date = return_date_calendar.get_date()
+            planned_return_date = return_date_calendar.get_date()
 
             # Input validation
-            if not book_id or not member_id or not borrow_date:
+            if not book_id or not member_id or not borrow_date or not planned_return_date:
                 messagebox.showwarning("Input Error", "Please fill all required fields.")
                 return
 
@@ -720,26 +722,18 @@ def start_main_app():
                     next_borrow_id += 1
 
                 # Insert borrowing record into the database
-                db_cursor.execute(
-                    "INSERT INTO Borrowing (borrow_id, book_id, member_id, borrow_date, return_date) VALUES (%s, %s, %s, %s, %s)",
-                    (next_borrow_id, book_id, member_id, borrow_date, return_date)
-                )
+                db_cursor.execute("""
+                    INSERT INTO Borrowing (borrow_id, book_id, member_id, borrow_date, planned_return_date, actual_return_date)
+                    VALUES (%s, %s, %s, %s, %s, NULL)
+                """, (next_borrow_id, book_id, member_id, borrow_date, planned_return_date))
+
                 # Update book quantity
                 db_cursor.execute("UPDATE Books SET quantity = quantity - 1 WHERE book_id = %s", (book_id,))
                 db_connection.commit()
 
-                # Append the record to Borrowing.csv
-                csv_file_path = "./data/Borrowing.csv"
-                file_exists = os.path.isfile(csv_file_path)
-                with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
-                    writer = csv.writer(csvfile)
-                    if not file_exists:
-                        writer.writerow(["borrow_id", "book_id", "member_id", "borrow_date", "return_date"])
-                    writer.writerow([next_borrow_id, book_id, member_id, borrow_date, return_date])
-
                 # Refresh the Borrowing and Books trees
-                refresh_borrowing_tree()  # Refresh Borrowing tab
-                refresh_books_tree()  # Refresh Books tab to update the quantity
+                refresh_borrowing_tree()
+                refresh_books_tree()
 
                 messagebox.showinfo("Success", "Borrowing record added successfully!")
                 add_borrowing_window.destroy()  # Close the Add Borrowing window
@@ -747,16 +741,10 @@ def start_main_app():
                 db_connection.rollback()  # Rollback changes in case of error
                 messagebox.showerror("Error", f"An error occurred: {e}")
 
-        # Add Borrowing Button
-        add_borrowing_button = Button(
-            add_borrowing_window,
-            text="Add Borrowing Record",
-            command=add_borrowing,
-            bg="#ff6666",
-            fg="white",
-            font=("Arial", 12, "bold")
-        )
-        add_borrowing_button.pack(pady=20)
+        # Add Borrow Button
+        add_borrow_button = Button(add_borrowing_window, text="Add Borrow", command=add_borrowing, bg="lightblue",
+                                   font=("Arial", 12, "bold"))
+        add_borrow_button.pack(pady=20)
 
     def delete_borrowing():
         selected_item = borrowing_tree.selection()
@@ -776,52 +764,34 @@ def start_main_app():
             messagebox.showwarning("Selection Error", "No borrowing record selected.")
             return
 
-        borrow_id = borrowing_tree.item(selected_item, 'values')[0]  # Get the selected borrow ID
+        borrow_id = borrowing_tree.item(selected_item, 'values')[0]  # Seçili borrow_id'yi al
         db_cursor.execute("SELECT * FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
-        borrow_record = db_cursor.fetchone()  # Set borrow_record as tuple borrowing tuple
+        borrow_record = db_cursor.fetchone()
 
         if not borrow_record:
             messagebox.showerror("Error", "Borrowing record not found.")
             return
 
-        # Extract record details
-        book_id, member_id, borrow_date, _ = borrow_record[1:]
-
         try:
-            # Move record to BorrowingHistory with current date as return_date
+            # actual_return_date alanını güncelle
             db_cursor.execute("""
-                INSERT INTO BorrowingHistory (borrow_id, book_id, member_id, borrow_date, return_date)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (borrow_id, book_id, member_id, borrow_date, date.today()))
+                UPDATE Borrowing SET actual_return_date = %s WHERE borrow_id = %s
+            """, (date.today(), borrow_id))
 
-            # Delete record from Borrowing
-            db_cursor.execute("DELETE FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
+            # Kitap stoğunu güncelle
+            book_id = borrow_record[1]
+            db_cursor.execute("UPDATE Books SET quantity = quantity + 1 WHERE book_id = %s", (book_id,))
 
-            # Update book quantity
-            db_cursor.execute("""
-                UPDATE Books SET quantity = quantity + 1 WHERE book_id = %s
-            """, (book_id,))
-
-            # Commit changes
             db_connection.commit()
 
-            # Refresh UI
-            refresh_borrowing_tree()  # Refresh Borrowing tab
-            refresh_borrowing_history_tree()  # Refresh Borrowing History tab
-            refresh_books_tree()  # Update book quantities in Books tab
-
-            # Update BorrowingHistory CSV
-            csv_file_path = "./data/BorrowingHistory.csv"
-            file_exists = os.path.isfile(csv_file_path)
-            with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
-                writer = csv.writer(csvfile)
-                if not file_exists:
-                    writer.writerow(["borrow_id", "book_id", "member_id", "borrow_date", "return_date"])  # Write header
-                writer.writerow([borrow_id, book_id, member_id, borrow_date, date.today()])  # Append new record
+            # UI'yi yenile
+            refresh_borrowing_tree()
+            refresh_borrowing_history_tree()
+            refresh_books_tree()
 
             messagebox.showinfo("Success", "Book returned successfully!")
         except Exception as e:
-            db_connection.rollback()  # Rollback changes in case of error
+            db_connection.rollback()
             messagebox.showerror("Error", f"An error occurred: {e}")
 
     # Add Buttons to Borrowing Tab
@@ -835,31 +805,72 @@ def start_main_app():
     return_book_button.pack(pady=5)
 
     # Borrowing History Tab
-    borrowing_history_tree_columns = ("Borrow ID", "Book ID", "Member ID", "Borrow Date", "Return Date")
-    borrowing_history_tree = ttk.Treeview(tabview.tab("Borrowing History"),
-                                          columns=borrowing_history_tree_columns,
-                                          show="headings",
-                                          selectmode="browse")
+    borrowing_history_tree_columns = (
+    "Borrow ID", "Book ID", "Member ID", "Borrow Date", "Planned Return Date", "Actual Return Date")
+    borrowing_history_tree = ttk.Treeview(
+        tabview.tab("Borrowing History"),
+        columns=borrowing_history_tree_columns,
+        show="headings",
+        selectmode="browse"
+    )
     borrowing_history_tree.pack(fill="both", expand=True)
 
     for col in borrowing_history_tree_columns:
         borrowing_history_tree.heading(col, text=col)
 
     def refresh_borrowing_history_tree():
+        """
+        Refreshes the Borrowing History tab with all records where actual_return_date is NOT NULL.
+        """
         borrowing_history_tree.delete(*borrowing_history_tree.get_children())  # Clear current data
-        db_cursor.execute("SELECT * FROM BorrowingHistory")
-        for history in db_cursor.fetchall():
-            borrowing_history_tree.insert("", END, values=history)
+
+        # Fetch records with actual_return_date NOT NULL
+        db_cursor.execute("""
+            SELECT borrow_id, book_id, member_id, borrow_date, planned_return_date, actual_return_date
+            FROM Borrowing
+            WHERE actual_return_date IS NOT NULL
+        """)
+        borrowing_data = db_cursor.fetchall()
+
+        for borrowing in borrowing_data:
+            borrow_id, book_id, member_id, borrow_date, planned_return_date, actual_return_date = borrowing
+            actual_return_date_obj = datetime.strptime(str(actual_return_date), "%Y-%m-%d").date()
+
+            # Determine the color
+            current_date = datetime.now().date()
+            if actual_return_date_obj > planned_return_date:
+                row_color = "red"  # Late return
+            elif actual_return_date_obj <= planned_return_date:
+                row_color = "green"  # Returned on time
+
+            # Insert row with a specific tag for color
+            borrowing_history_tree.insert("", END, values=borrowing, tags=(row_color,))
+
+        # Configure row colors based on tags
+        borrowing_history_tree.tag_configure("green", background="lightgreen", foreground="black")
+        borrowing_history_tree.tag_configure("red", background="lightcoral", foreground="black")
+
+    # Add explanatory label for Borrowing History
+    history_explanation_label = Label(
+        tabview.tab("Borrowing History"),
+        text="Color Codes:\n"
+             "Green: Returned on or before the planned return date.\n"
+             "Red: Returned late.",
+        font=("Arial", 10),
+        justify="left",
+        fg="black"
+    )
+    history_explanation_label.pack(pady=10, anchor="w")
 
     refresh_borrowing_history_tree()
     ### Analytics Tab
     def refresh_analytics_tab():
         """
-        Refreshes the analytics tab with four visualizations:
-        1. Borrowed Book Statistics (Top-left, Pie Chart)
-        2. Top 5 Most Borrowed Books (Top-right, Bar Chart)
-        3. Books Borrowed by Members (Bottom-left, Bar Chart)
-        4. Dummy Chart (Bottom-right, Pie Chart)
+        Refreshes the analytics tab with updated visualizations:
+        1. Borrowed Book Statistics (Pie Chart)
+        2. Top 5 Most Borrowed Books (Bar Chart)
+        3. Books Borrowed by Members (Bar Chart)
+        4. Most Borrowed Genres
         """
         # Clear the current content
         for widget in tabview.tab("Analytics").winfo_children():
@@ -876,10 +887,10 @@ def start_main_app():
 
         ### Query 1: Borrowed Book Statistics ###
         db_cursor.execute("""
-            SELECT genre, COUNT(*) AS count
-            FROM BorrowingHistory
-            INNER JOIN Books ON BorrowingHistory.book_id = Books.book_id
-            GROUP BY genre
+            SELECT genre, COUNT(*) AS borrow_count
+            FROM Borrowing
+            JOIN Books ON Borrowing.book_id = Books.book_id
+            GROUP BY genre;
         """)
         genre_data = db_cursor.fetchall()
 
@@ -894,20 +905,20 @@ def start_main_app():
 
         ### Query 2: Top 5 Most Borrowed Books ###
         db_cursor.execute("""
-            SELECT title, COUNT(*) AS count
-            FROM BorrowingHistory
-            INNER JOIN Books ON BorrowingHistory.book_id = Books.book_id
-            GROUP BY title
-            ORDER BY count DESC
-            LIMIT 5
+            SELECT Books.title, COUNT(*) AS borrow_count
+            FROM Borrowing
+            JOIN Books ON Borrowing.book_id = Books.book_id
+            GROUP BY Books.title
+            ORDER BY borrow_count DESC
+            LIMIT 5;
         """)
-        top_books_data = db_cursor.fetchall()
+        most_borrowed_data = db_cursor.fetchall()
 
-        if top_books_data:
-            titles, counts = zip(*top_books_data)
+        if most_borrowed_data:
+            titles, borrow_counts = zip(*most_borrowed_data)
             fig2, ax2 = plt.subplots(figsize=(4, 3))
-            ax2.barh(titles, counts, color="skyblue")
-            ax2.set_xlabel("Number of Times Borrowed")
+            ax2.barh(titles, borrow_counts, color="lightblue")
+            ax2.set_xlabel("Borrow Count")
             ax2.set_title("Top 5 Most Borrowed Books", fontsize=10)
             ax2.invert_yaxis()
 
@@ -916,39 +927,50 @@ def start_main_app():
 
         ### Query 3: Books Borrowed by Members ###
         db_cursor.execute("""
-            SELECT CONCAT(first_name, ' ', last_name) AS member_name, COUNT(*) AS count
-            FROM BorrowingHistory
-            INNER JOIN Members ON BorrowingHistory.member_id = Members.member_id
-            GROUP BY member_name
-            ORDER BY count DESC
-            LIMIT 5
+            SELECT CONCAT(Members.first_name, ' ', Members.last_name) AS member_name, COUNT(*) AS borrow_count
+            FROM Borrowing
+            JOIN Members ON Borrowing.member_id = Members.member_id
+            GROUP BY Members.member_id
+            ORDER BY borrow_count DESC;
         """)
-        members_data = db_cursor.fetchall()
+        member_borrow_data = db_cursor.fetchall()
 
-        if members_data:
-            member_names, borrow_counts = zip(*members_data)
+        if member_borrow_data:
+            member_names, borrow_counts = zip(*member_borrow_data)
             fig3, ax3 = plt.subplots(figsize=(4, 3))
             ax3.bar(member_names, borrow_counts, color="lightgreen")
             ax3.set_xlabel("Members")
-            ax3.set_ylabel("Books Borrowed")
+            ax3.set_ylabel("Borrow Count")
             ax3.set_title("Books Borrowed by Members", fontsize=10)
 
             canvas3 = FigureCanvasTkAgg(fig3, master=analytics_frame)
             canvas3.get_tk_widget().grid(row=1, column=0, padx=20, pady=20)
 
-        ### Dummy Chart: Bottom-right ###
-        labels = ["Category A", "Category B", "Category C"]
-        sizes = [40, 30, 30]
-        colors = ["gold", "lightcoral", "lightskyblue"]
+        ### Query 4: Most Borrowed Genres ###
+        db_cursor.execute("""
+            SELECT Books.genre, COUNT(*) AS borrow_count
+            FROM Borrowing
+            JOIN Books ON Borrowing.book_id = Books.book_id
+            GROUP BY Books.genre
+            ORDER BY borrow_count DESC;
+        """)
+        genre_borrow_data = db_cursor.fetchall()
 
-        fig4, ax4 = plt.subplots(figsize=(4, 3))
-        ax4.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90, colors=colors)
-        ax4.set_title("Dummy Chart Example", fontsize=10)
+        if genre_borrow_data:
+            genres, borrow_counts = zip(*genre_borrow_data)
+            fig4, ax4 = plt.subplots(figsize=(4, 3))
+            ax4.bar(genres, borrow_counts, color="orange")
+            ax4.set_xlabel("Genre")
+            ax4.set_ylabel("Borrow Count")
+            ax4.set_title("Most Borrowed Genres", fontsize=10)
+            ax4.tick_params(axis='x', rotation=45)  # Rotate x-axis labels for better visibility
+
+            canvas4 = FigureCanvasTkAgg(fig4, master=analytics_frame)
+            canvas4.get_tk_widget().grid(row=1, column=1, padx=20, pady=20)
 
         canvas4 = FigureCanvasTkAgg(fig4, master=analytics_frame)
         canvas4.get_tk_widget().grid(row=1, column=1, padx=20, pady=20)
 
-    # Refresh Analytics when the tab is first loaded
     refresh_analytics_tab()
 
     main_app.mainloop()
