@@ -14,7 +14,7 @@ import csv
 db_connection = mysql.connector.connect(
     host="localhost",
     user="root",
-    passwd="Emsalinur12345",
+    passwd="Fatura10*",
     auth_plugin='mysql_native_password'
 )
 db_cursor = db_connection.cursor(buffered=True)
@@ -366,9 +366,20 @@ def start_main_app():
         search_button = Button(search_window, text="Search", command=perform_search)
         search_button.pack(pady=20)
 
+    def reset_books():
+        """Resets the book list to show all books."""
+        books_tree.delete(*books_tree.get_children())
+        db_cursor.execute("SELECT * FROM Books")
+        for book in db_cursor.fetchall():
+            books_tree.insert("", END, values=book)
+        messagebox.showinfo("Reset", "Book list has been reset.")
+
     # Search Books Button
     search_books_button = Button(tabview.tab("Books"), text="Search Books", command=search_books)
     search_books_button.pack(pady=5)
+
+    reset_button = Button(tabview.tab("Books"), text="Reset", command=reset_books)
+    reset_button.pack(pady=10)
 
     ### Members Tab
     members_tree_columns = ("Member ID", "First Name", "Last Name", "Phone Number", "Email")
