@@ -7,6 +7,7 @@ from tkinter import ttk
 from tkinter import messagebox
 from tkcalendar import Calendar
 from datetime import date
+from datetime import datetime
 
 # Imports for database
 import mysql.connector
@@ -16,7 +17,7 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="faruk123",
+  passwd="ksu12345",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
@@ -171,6 +172,11 @@ def start_main_app():
     main_app.title("Library Management System")
     main_app.geometry("1200x700+70+0")
     main_app.resizable(False, False)
+
+    # Time Label
+    time_label = Label(main_app, font=("Arial", 10), fg="grey")
+    time_label.pack(side="bottom", anchor="e", pady=5)
+    update_time_label(time_label)  # Start updating time
 
     # Tabview Setup
     tabview = customtkinter.CTkTabview(master=main_app)
@@ -639,6 +645,11 @@ def start_main_app():
     refresh_borrowing_history_tree()
 
     main_app.mainloop()
+def update_time_label(label):
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    label.config(text=current_time)
+    label.after(1000, lambda: update_time_label(label))  # Update every second
+
 
 # Start the Application with Login
 if __name__ == "__main__":
