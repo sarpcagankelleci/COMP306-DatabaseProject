@@ -19,7 +19,7 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="faruk123",
+  passwd="Fatura10*",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
@@ -123,6 +123,36 @@ insert_borrowing_query = """
 populate_table("./data/Borrowing.csv", insert_borrowing_query)
 
 
+def sort_treeview(tree, column, is_numeric=False):
+
+    data = [(tree.set(child, column), child) for child in tree.get_children("")]
+
+    # Determine sort order
+    if is_numeric:
+        data.sort(key=lambda item: float(item[0]) if item[0].isdigit() else 0, reverse=sort_treeview.descending)
+    else:
+        data.sort(key=lambda item: item[0], reverse=sort_treeview.descending)
+
+    for index, (val, child) in enumerate(data):
+        tree.move(child, "", index)
+
+    # Toggle order for next click
+    sort_treeview.descending = not sort_treeview.descending
+
+
+# Set default sorting order
+sort_treeview.descending = False
+
+def setup_sorting(tree, columns, numeric_columns=None):
+
+    if numeric_columns is None:
+        numeric_columns = set()
+
+    for col_index, col_name in enumerate(columns):
+        is_numeric = col_index in numeric_columns  # Determine if the column is numeric
+        tree.heading(col_name, text=col_name, command=lambda col=col_name, num=is_numeric: sort_treeview(tree, col, num))
+
+
 # Login Screen
 def login_screen():
     login_window = customtkinter.CTk()
@@ -202,6 +232,8 @@ def start_main_app():
 
     for col in books_tree_columns:
         books_tree.heading(col, text=col)
+
+    setup_sorting(books_tree, books_tree_columns, numeric_columns={4, 5, 7})
 
     def refresh_books_tree():
         books_tree.delete(*books_tree.get_children())
@@ -430,6 +462,7 @@ def start_main_app():
         Radiobutton(sort_option_window, text="Year Published", variable=sort_option_var, value="Year Published").pack(
             pady=5)
         Radiobutton(sort_option_window, text="Quantity", variable=sort_option_var, value="Quantity").pack(pady=5)
+        Radiobutton(sort_option_window, text="Page Number", variable=sort_option_var, value="Page Number").pack(pady=5)
 
         def open_sort_order_window():
             """
@@ -459,7 +492,12 @@ def start_main_app():
                 sort_order = sort_order_var.get()
 
                 # Determine column name
-                column_name = "year_published" if sort_option == "Year Published" else "quantity"
+                if sort_option == "Year Published":
+                    column_name = "year_published"
+                elif sort_option == "Quantity":
+                    column_name = "quantity"
+                else:
+                    column_name = "page_number"
 
                 # Construct and execute query
                 query = f"SELECT * FROM Books ORDER BY {column_name} {'ASC' if sort_order == 'Ascending' else 'DESC'}"
@@ -488,6 +526,8 @@ def start_main_app():
 
     for col in members_tree_columns:
         members_tree.heading(col, text=col)
+
+    setup_sorting(members_tree, members_tree_columns)
 
     def refresh_members_tree():
         members_tree.delete(*members_tree.get_children())
@@ -574,6 +614,8 @@ def start_main_app():
 
     for col in borrowing_tree_columns:
         borrowing_tree.heading(col, text=col)
+
+    setup_sorting(borrowing_tree, borrowing_tree_columns, numeric_columns={0})
 
     def refresh_borrowing_tree():
         """
@@ -818,6 +860,8 @@ def start_main_app():
 
     for col in borrowing_history_tree_columns:
         borrowing_history_tree.heading(col, text=col)
+
+    setup_sorting(borrowing_history_tree, borrowing_history_tree_columns, numeric_columns={0})
 
     def refresh_borrowing_history_tree():
         """
