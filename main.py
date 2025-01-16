@@ -19,7 +19,7 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="ksu12345",
+  passwd="Fatura10*",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
@@ -224,6 +224,10 @@ def start_main_app():
         tabview.add(tab)
     tabview.set("Books")
 
+    # Create a Frame for buttons in the Books tab
+    button_frame = Frame(tabview.tab("Books"))
+    button_frame.pack(pady=10, padx=10, fill="x")  # Centered horizontally
+
     # Books Tab
     books_tree_columns = (
     "Book ID", "Title", "Author", "Genre", "Year Published", "Quantity", "Language", "Page Number")
@@ -375,11 +379,100 @@ def start_main_app():
         refresh_books_tree()
         messagebox.showinfo("Success", f"Book with ID {book_id} has been deleted.")
 
-    add_book_button = Button(tabview.tab("Books"), text="Add Book", command=open_add_book_window)
-    add_book_button.pack(pady=5)
+    add_book_button = Button(button_frame, text="Add Book", command=open_add_book_window)
+    add_book_button.pack(side=LEFT, padx=5)
 
-    delete_book_button = Button(tabview.tab("Books"), text="Delete Book", command=delete_book)
-    delete_book_button.pack(pady=5)
+    delete_book_button = Button(button_frame, text="Delete Book", command=delete_book)
+    delete_book_button.pack(side=LEFT, padx=5)
+
+    ### Search Books Feature
+    def search_books():
+        # Yeni bir pencere oluştur
+        search_window = Toplevel(main_app)
+        search_window.title("Search Books")
+        search_window.geometry("400x400")
+
+        # Kitap arama kriterleri için label ve entry bölümleri
+        title_label = Label(search_window, text="Title")
+        title_label.pack(pady=5)
+        title_entry = Entry(search_window)
+        title_entry.pack(pady=5)
+
+        author_label = Label(search_window, text="Author")
+        author_label.pack(pady=5)
+        author_entry = Entry(search_window)
+        author_entry.pack(pady=5)
+
+        genre_label = Label(search_window, text="Genre")
+        genre_label.pack(pady=5)
+        genre_entry = Entry(search_window)
+        genre_entry.pack(pady=5)
+
+        year_label = Label(search_window, text="Year Published")
+        year_label.pack(pady=5)
+        year_entry = Entry(search_window)
+        year_entry.pack(pady=5)
+
+        # Arama Fonkisyonu
+        def perform_search():
+            # Kullanıcı kriterlerini oku
+            title = title_entry.get()
+            author = author_entry.get()
+            genre = genre_entry.get()
+            year_published = year_entry.get()
+
+            # Dinamik SQL Query oluştur
+            query = "SELECT * FROM Books WHERE 1=1"
+            params = []
+
+            if title:
+                query += " AND title LIKE %s"
+                params.append(f"%{title}%")
+            if author:
+                query += " AND author LIKE %s"
+                params.append(f"%{author}%")
+            if genre:
+                query += " AND genre LIKE %s"
+                params.append(f"%{genre}%")
+            if year_published:
+                if year_published.isdigit():
+                    query += " AND year_published = %s"
+                    params.append(year_published)
+                else:
+                    messagebox.showwarning("Input Error", "Year Published should be a number.")
+                    return
+
+            # Veritabanında sorguyu çalıştır ve kitap ağacını güncelle
+            db_cursor.execute(query, tuple(params))
+            results = db_cursor.fetchall()
+
+            # Mevcut tabloda sonuçları göster
+            books_tree.delete(*books_tree.get_children())
+            for book in results:
+                books_tree.insert("", END, values=book)
+
+            # Kullanıcıya bilgi ver
+            messagebox.showinfo("Search Complete", f"{len(results)} results found.")
+            search_window.destroy()
+
+        # Arama butonu
+        search_button = Button(search_window, text="Search", command=perform_search)
+        search_button.pack(pady=20)
+
+    def reset_books():
+        """Resets the book list to show all books."""
+        books_tree.delete(*books_tree.get_children())
+        db_cursor.execute("SELECT * FROM Books")
+        for book in db_cursor.fetchall():
+            books_tree.insert("", END, values=book)
+        messagebox.showinfo("Reset", "Book list has been reset.")
+
+    # Search Books Button
+    search_books_button = Button(button_frame, text="Search Books", command=search_books)
+    search_books_button.pack(side=LEFT, padx=5)
+
+    reset_button = Button(button_frame, text="Reset", command=reset_books)
+    reset_button.pack(side=LEFT, padx=5)
 
     def open_category_filter_window():
         """
@@ -443,8 +536,8 @@ def start_main_app():
         reset_button.pack(pady=10)
 
     # Add Category Filter Button to the Books Tab
-    category_filter_button = Button(tabview.tab("Books"), text="Category Filter", command=open_category_filter_window)
-    category_filter_button.pack(pady=5)
+    category_filter_button = Button(button_frame, text="Category Filter", command=open_category_filter_window)
+    category_filter_button.pack(side=LEFT, padx=5)
 
     def open_sort_option_window():
         """
@@ -516,8 +609,8 @@ def start_main_app():
         Button(sort_option_window, text="Next", command=open_sort_order_window).pack(pady=20)
 
     # Add the Sort Button to the Books Tab
-    sort_button = Button(tabview.tab("Books"), text="Sort", command=open_sort_option_window)
-    sort_button.pack(pady=5)
+    sort_button = Button(button_frame, text="Sort", command=open_sort_option_window)
+    sort_button.pack(side=LEFT, padx=5)
 
     ### Members Tab
     members_tree_columns = ("Member ID", "First Name", "Last Name", "Phone Number", "Email")
