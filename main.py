@@ -83,8 +83,8 @@ db_cursor.execute("""
         borrow_date DATE,
         planned_return_date DATE,
         actual_return_date DATE,
-        FOREIGN KEY (book_id) REFERENCES Books(book_id),
-        FOREIGN KEY (member_id) REFERENCES Members(member_id)
+        FOREIGN KEY (book_id) REFERENCES Books(book_id) ON DELETE CASCADE ON UPDATE NO ACTION,
+        FOREIGN KEY (member_id) REFERENCES Members(member_id) ON DELETE CASCADE ON UPDATE NO ACTION
     )
 """)
 
@@ -377,6 +377,7 @@ def start_main_app():
         db_cursor.execute("DELETE FROM Books WHERE book_id = %s", (book_id,))
         db_connection.commit()
         refresh_books_tree()
+        refresh_borrowing_tree()
         messagebox.showinfo("Success", f"Book with ID {book_id} has been deleted.")
 
     add_book_button = Button(button_frame, text="Add Book", command=open_add_book_window)
@@ -690,6 +691,7 @@ def start_main_app():
         db_cursor.execute("DELETE FROM Members WHERE member_id = %s", (member_id,))
         db_connection.commit()
         refresh_members_tree()
+        refresh_borrowing_tree()
         messagebox.showinfo("Success", f"Member with ID {member_id} has been deleted.")
 
     add_member_button = Button(tabview.tab("Members"), text="Add Member", command=open_add_member_window)
