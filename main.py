@@ -249,7 +249,6 @@ def start_main_app():
 
     def open_add_book_window():
         add_book_window = Toplevel(main_app)
-
         add_book_window.title("Add Book")
         add_book_window.geometry("400x700")
 
