@@ -19,7 +19,7 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="Sultan9988",
+  passwd="Fatura10*",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
@@ -1077,6 +1077,59 @@ def start_main_app():
         """)
         yearly_borrow_data = db_cursor.fetchall()
 
+        db_cursor.execute("""
+                SELECT Books.title, Members.first_name, Members.last_name
+                FROM Borrowing
+                JOIN Books ON Borrowing.book_id = Books.book_id
+                JOIN Members ON Borrowing.member_id = Members.member_id
+                WHERE actual_return_date IS NULL;
+            """)
+        never_returned_books = db_cursor.fetchall()
+
+        db_cursor.execute("""
+                SELECT Members.member_id, CONCAT(Members.first_name, ' ', Members.last_name) AS member_name, COUNT(*) AS overdue_count
+                FROM Borrowing
+                JOIN Members ON Borrowing.member_id = Members.member_id
+                WHERE actual_return_date > planned_return_date
+                GROUP BY Members.member_id
+                ORDER BY overdue_count DESC
+                LIMIT 5;
+            """)
+        most_overdue_members = db_cursor.fetchall()
+
+        db_cursor.execute("""
+                SELECT genre, AVG(DATEDIFF(actual_return_date, borrow_date)) AS avg_days_borrowed
+                FROM Borrowing
+                JOIN Books ON Borrowing.book_id = Books.book_id
+                WHERE actual_return_date IS NOT NULL
+                GROUP BY genre
+                ORDER BY avg_days_borrowed DESC;
+            """)
+        avg_borrow_duration_by_genre = db_cursor.fetchall()
+
+        db_cursor.execute("""
+                SELECT author, COUNT(*) AS borrow_count
+                FROM Books
+                WHERE book_id IN (
+                    SELECT book_id FROM Borrowing
+                )
+                GROUP BY author
+                ORDER BY borrow_count DESC
+                LIMIT 5;
+            """)
+        most_borrowed_authors = db_cursor.fetchall()
+
+        db_cursor.execute("""
+                SELECT Books.title, COUNT(DISTINCT DATE_FORMAT(borrow_date, '%Y-%m')) AS borrowing_months
+                FROM Borrowing
+                JOIN Books ON Borrowing.book_id = Books.book_id
+                GROUP BY Books.title
+                HAVING borrowing_months > 3
+                ORDER BY borrowing_months DESC
+                LIMIT 5;
+            """)
+        consecutive_months_borrowed = db_cursor.fetchall()
+
         # Prepare the data for the pages
         pages = []
 
@@ -1132,6 +1185,46 @@ def start_main_app():
             ax.set_xlabel("Year")
             ax.set_ylabel("Number of Borrows")
             ax.grid(True, linestyle='--', alpha=0.7)
+            figures.append(fig)
+
+        if never_returned_books:
+            titles, first_names, last_names = zip(*never_returned_books)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.barh(titles, range(len(titles)), color="red")
+            ax.set_title("Books That Were Never Returned", fontsize=10)
+            ax.invert_yaxis()
+            figures.append(fig)
+
+        if most_overdue_members:
+            member_names, overdue_counts = zip(*[(row[1], row[2]) for row in most_overdue_members])
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.bar(member_names, overdue_counts, color="orange")
+            ax.set_title("Top 5 Members with Most Overdue Books", fontsize=10)
+            ax.tick_params(axis="x", rotation=45, labelsize=8)
+            figures.append(fig)
+
+        if avg_borrow_duration_by_genre:
+            genres, avg_days = zip(*avg_borrow_duration_by_genre)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.bar(genres, avg_days, color="purple")
+            ax.set_title("Average Borrow Duration by Genre", fontsize=10)
+            ax.tick_params(axis="x", rotation=45, labelsize=8)
+            figures.append(fig)
+
+        if most_borrowed_authors:
+            authors, borrow_counts = zip(*most_borrowed_authors)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.barh(authors, borrow_counts, color="green")
+            ax.set_title("Top 5 Most Borrowed Authors", fontsize=10)
+            ax.invert_yaxis()
+            figures.append(fig)
+
+        if consecutive_months_borrowed:
+            titles, months = zip(*consecutive_months_borrowed)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.barh(titles, months, color="blue")
+            ax.set_title("Books Borrowed in Consecutive Months", fontsize=10)
+            ax.invert_yaxis()
             figures.append(fig)
 
         # Group figures into pages (two per page)
