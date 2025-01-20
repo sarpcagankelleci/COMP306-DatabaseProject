@@ -19,7 +19,7 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="Emsalinur12345",
+  passwd="Sultan9988",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
