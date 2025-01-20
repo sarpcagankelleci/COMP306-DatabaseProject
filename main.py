@@ -19,7 +19,7 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="ksu12345",
+  passwd="Emsalinur12345",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
@@ -1167,33 +1167,14 @@ def start_main_app():
 
     def refresh_analytics_tab():
         """
-        Refreshes the analytics tab with updated visualizations in a scrollable frame, with each graphic properly centered.
+        Refreshes the analytics tab with updated visualizations, divided into pages with navigation buttons.
+        Each page contains two graphs side by side, with navigation buttons centered at the bottom.
         """
         # Clear the current content
         for widget in tabview.tab("Analytics").winfo_children():
             widget.destroy()
 
-        # Create a Canvas for scrolling
-        canvas = Canvas(tabview.tab("Analytics"))
-        canvas.pack(side=LEFT, fill=BOTH, expand=True)
-
-        # Add a vertical scrollbar to the canvas
-        scrollbar = Scrollbar(tabview.tab("Analytics"), orient=VERTICAL, command=canvas.yview)
-        scrollbar.pack(side=RIGHT, fill=Y)
-
-        # Configure the canvas for scrolling
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-
-        # Create a frame inside the canvas to hold the content
-        content_frame = Frame(canvas)
-        canvas.create_window((0, 0), window=content_frame, anchor="nw")
-
-        # Ensure the content_frame uses a grid layout
-        content_frame.columnconfigure(0, weight=1)
-
-        ### Add Visualizations to the Content Frame ###
-        # Borrowed Book Statistics
+        # Fetch the data for all graphs
         db_cursor.execute("""
             SELECT genre, COUNT(*) AS borrow_count
             FROM Borrowing
@@ -1202,18 +1183,6 @@ def start_main_app():
         """)
         genre_data = db_cursor.fetchall()
 
-        if genre_data:
-            genres, counts = zip(*genre_data)
-            fig1, ax1 = plt.subplots(figsize=(10, 10))  # Larger size
-            ax1.pie(counts, labels=genres, autopct="%1.1f%%", startangle=90, textprops={'fontsize': 10})
-            ax1.set_title("Borrowed Book Statistics", fontsize=16)
-
-            canvas1 = FigureCanvasTkAgg(fig1, master=content_frame)
-            widget1 = canvas1.get_tk_widget()
-            widget1.grid(row=0, column=0, pady=20, sticky="nsew")  # Centered
-
-        # Top 5 Most Borrowed Books
-        # Top 5 Most Borrowed Books
         db_cursor.execute("""
             SELECT Books.title, COUNT(*) AS borrow_count
             FROM Borrowing
@@ -1224,37 +1193,6 @@ def start_main_app():
         """)
         most_borrowed_data = db_cursor.fetchall()
 
-        if most_borrowed_data:
-            titles, borrow_counts = zip(*most_borrowed_data)
-            fig2, ax2 = plt.subplots(figsize=(10, 7))  # Larger size
-
-            # Horizontal bar chart
-            ax2.barh(titles, borrow_counts, color="lightblue")
-
-            # Adjust x-axis and y-axis labels
-            ax2.set_xlabel("Borrow Count", fontsize=12)
-            ax2.set_title("Top 5 Most Borrowed Books", fontsize=16)
-
-            # Increase margin to add space to the left of the y-axis labels
-            ax2.margins(y=0.2)
-
-            # Adjust tick label alignment and set a larger font size for better visibility
-            ax2.tick_params(axis='y', labelsize=12, pad=10)  # 'pad' moves the labels to the right
-            ax2.tick_params(axis='x', labelsize=10)
-
-            # Invert the y-axis to keep the order
-            ax2.invert_yaxis()
-
-            # Use tight_layout to ensure the layout fits the labels
-            fig2.tight_layout()
-
-            # Render the chart on the Tkinter canvas
-            canvas2 = FigureCanvasTkAgg(fig2, master=content_frame)
-            widget2 = canvas2.get_tk_widget()
-            widget2.grid(row=1, column=0, pady=20, sticky="nsew")  # Centered
-
-
-     # Books Borrowed by Members
         db_cursor.execute("""
             SELECT CONCAT(Members.first_name, ' ', Members.last_name) AS member_name, COUNT(*) AS borrow_count
             FROM Borrowing
@@ -1264,21 +1202,6 @@ def start_main_app():
         """)
         member_borrow_data = db_cursor.fetchall()
 
-        if member_borrow_data:
-            member_names, borrow_counts = zip(*member_borrow_data)
-            fig3, ax3 = plt.subplots(figsize=(10, 12))  # Larger size
-            ax3.bar(member_names, borrow_counts, color="lightgreen")
-            ax3.set_xlabel("Members", fontsize=12)
-            ax3.set_ylabel("Borrow Count", fontsize=12)
-            ax3.set_title("Books Borrowed by Members", fontsize=16)
-            ax3.tick_params(axis='x', labelsize=10, rotation=45)  # Rotate for readability
-            ax3.tick_params(axis='y', labelsize=10)
-
-            canvas3 = FigureCanvasTkAgg(fig3, master=content_frame)
-            widget3 = canvas3.get_tk_widget()
-            widget3.grid(row=2, column=0, pady=20, sticky="nsew")  # Centered
-
-        # Most Borrowed Genres
         db_cursor.execute("""
             SELECT Books.genre, COUNT(*) AS borrow_count
             FROM Borrowing
@@ -1288,23 +1211,126 @@ def start_main_app():
         """)
         genre_borrow_data = db_cursor.fetchall()
 
+        db_cursor.execute("""
+            SELECT Books.language, COUNT(*) AS borrow_count
+            FROM Borrowing
+            JOIN Books ON Borrowing.book_id = Books.book_id
+            GROUP BY Books.language
+            ORDER BY borrow_count DESC;
+        """)
+        language_borrow_data = db_cursor.fetchall()
+
+        db_cursor.execute("""
+            SELECT YEAR(borrow_date) AS year, COUNT(*) AS borrow_count
+            FROM Borrowing
+            GROUP BY year
+            ORDER BY year;
+        """)
+        yearly_borrow_data = db_cursor.fetchall()
+
+        # Prepare the data for the pages
+        pages = []
+
+        # Create figures and group them into pages (two figures per page)
+        figures = []
+
+        if genre_data:
+            genres, counts = zip(*genre_data)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.pie(counts, labels=genres, autopct="%1.1f%%", startangle=90, textprops={'fontsize': 8})
+            ax.set_title("Borrowed Book Statistics", fontsize=10)
+            figures.append(fig)
+
+        if most_borrowed_data:
+            titles, borrow_counts = zip(*most_borrowed_data)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.barh(titles, borrow_counts, color="lightblue" )
+            ax.tick_params(axis='y', labelsize=5)
+            ax.set_yticklabels(titles, rotation=45, ha='right', fontsize=6)  # Çapraz yazılar ve sağa hizalama
+            ax.set_title("Top 5 Most Borrowed Books", fontsize=10)
+            ax.invert_yaxis()
+            figures.append(fig)
+
+        if member_borrow_data:
+            member_names, borrow_counts = zip(*member_borrow_data)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.bar(member_names, borrow_counts, color="lightgreen")
+            ax.set_title("Books Borrowed by Members", fontsize=10)
+            ax.tick_params(axis='x', rotation=45, labelsize=8)
+            figures.append(fig)
+
         if genre_borrow_data:
             genres, borrow_counts = zip(*genre_borrow_data)
-            fig4, ax4 = plt.subplots(figsize=(10, 12))  # Larger size
-            ax4.bar(genres, borrow_counts, color="orange")
-            ax4.set_xlabel("Genre", fontsize=12)
-            ax4.set_ylabel("Borrow Count", fontsize=12)
-            ax4.set_title("Most Borrowed Genres", fontsize=16)
-            ax4.tick_params(axis='x', labelsize=10, rotation=45)  # Rotate x-axis labels for better visibility
-            ax4.tick_params(axis='y', labelsize=10)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.bar(genres, borrow_counts, color="orange")
+            ax.set_title("Most Borrowed Genres", fontsize=10)
+            ax.tick_params(axis='x', rotation=45, labelsize=8)
+            figures.append(fig)
 
-            canvas4 = FigureCanvasTkAgg(fig4, master=content_frame)
-            widget4 = canvas4.get_tk_widget()
-            widget4.grid(row=3, column=0, pady=20, sticky="nsew")  # Centered
+        if language_borrow_data:
+            languages, counts = zip(*language_borrow_data)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.bar(languages, counts, color="purple")
+            ax.set_title("Books Borrowed by Language", fontsize=10)
+            ax.tick_params(axis='x', rotation=45, labelsize=8)
+            figures.append(fig)
 
-        # Add padding to the bottom of the content frame for spacing
-        Frame(content_frame, height=20).grid(row=4, column=0)
+        if yearly_borrow_data:
+            years, counts = zip(*yearly_borrow_data)
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.plot(years, counts, marker='o', color="teal")
+            ax.set_title("Yearly Borrowing Trend", fontsize=10)
+            ax.set_xlabel("Year")
+            ax.set_ylabel("Number of Borrows")
+            ax.grid(True, linestyle='--', alpha=0.7)
+            figures.append(fig)
 
+        # Group figures into pages (two per page)
+        for i in range(0, len(figures), 2):
+            pages.append(figures[i:i + 2])
+
+        # State for the current page
+        current_page = [0]
+
+        def show_page():
+            for widget in tabview.tab("Analytics").winfo_children():
+                widget.destroy()
+
+            page = pages[current_page[0]]
+
+            frame = Frame(tabview.tab("Analytics"))
+            frame.pack(expand=True, fill="both")
+
+            for fig in page:
+                canvas = FigureCanvasTkAgg(fig, master=frame)
+                widget = canvas.get_tk_widget()
+                widget.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+
+            navigation_frame = Frame(tabview.tab("Analytics"))
+            navigation_frame.pack(fill="x", side="bottom")
+
+            prev_button = Button(navigation_frame, text="Previous", command=lambda: change_page(-1), bg="black",
+                                 fg="black")
+            next_button = Button(navigation_frame, text="Next", command=lambda: change_page(1), bg="black", fg="black")
+
+            prev_button.pack(side="left", padx=20, pady=10)
+            next_button.pack(side="right", padx=20, pady=10)
+
+            if current_page[0] == 0:
+                prev_button.config(state=DISABLED)
+            if current_page[0] == len(pages) -1:
+                next_button.config(state=DISABLED)
+
+        def change_page(direction):
+            current_page[0] += direction
+            show_page()
+
+        if pages:
+            show_page()
+        else:
+            Label(tabview.tab("Analytics"), text="No data available for analytics.", font=("Arial", 12)).pack(pady=20)
+
+    # Refresh the Analytics tab with the updated functionality
     refresh_analytics_tab()
 
     #Refreshes All Tabs
