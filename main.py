@@ -1163,6 +1163,7 @@ def start_main_app():
     )
     history_explanation_label.pack(pady=10, anchor="w")
 
+
     refresh_borrowing_history_tree()
 
     def refresh_analytics_tab():
