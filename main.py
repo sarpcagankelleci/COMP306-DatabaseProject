@@ -25,8 +25,6 @@ db_connection = mysql.connector.connect(
 print(db_connection)
 db_cursor = db_connection.cursor(buffered=True)
 
-#deneme
-
 # Helper Function: Populate Table from CSV
 def populate_table(file_path, insert_query):
     with open(file_path, 'r') as file:
@@ -37,6 +35,7 @@ def populate_table(file_path, insert_query):
             row = [None if value == 'NULL' else value for value in row]
             db_cursor.execute(insert_query, row)
     db_connection.commit()
+
 
 
 
@@ -377,7 +376,8 @@ def start_main_app():
         book_id = books_tree.item(selected_item, 'values')[0]
         db_cursor.execute("DELETE FROM Books WHERE book_id = %s", (book_id,))
         db_connection.commit()
-        refresh_tabs()
+        refresh_books_tree()
+        refresh_borrowing_tree()
         messagebox.showinfo("Success", f"Book with ID {book_id} has been deleted.")
 
     add_book_button = Button(button_frame, text="Add Book", command=open_add_book_window)
@@ -385,63 +385,6 @@ def start_main_app():
 
     delete_book_button = Button(button_frame, text="Delete Book", command=delete_book)
     delete_book_button.pack(side=LEFT, padx=5)
-
-    def open_update_book_window():
-        selected_item = books_tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Selection Error", "No book selected.")
-            return
-
-        book_values = books_tree.item(selected_item, 'values')
-        book_id = book_values[0]
-
-        update_book_window = Toplevel(main_app)
-        update_book_window.title("Update Book")
-        update_book_window.geometry("400x700")
-
-        # Labels and Entries
-        fields = ["Title", "Author", "Genre", "Year Published", "Quantity", "Language", "Page Number"]
-        entries = {}
-
-        for field, value in zip(fields, book_values[1:]):
-            Label(update_book_window, text=field).pack(pady=5)
-            entry = Entry(update_book_window)
-            entry.insert(0, value)
-            entry.pack(pady=5)
-            entries[field] = entry
-
-        def update_book():
-            title = entries["Title"].get()
-            author = entries["Author"].get()
-            genre = entries["Genre"].get()
-            year_published = entries["Year Published"].get()
-            quantity = entries["Quantity"].get()
-            language = entries["Language"].get()
-            page_number = entries["Page Number"].get()
-
-            if not all([title, author, genre, year_published, quantity, language, page_number]):
-                messagebox.showwarning("Input Error", "Please fill all fields.")
-                return
-
-            try:
-                db_cursor.execute("""
-                    UPDATE Books
-                    SET title=%s, author=%s, genre=%s, year_published=%s, quantity=%s, language=%s, page_number=%s
-                    WHERE book_id=%s
-                """, (title, author, genre, int(year_published), int(quantity), language, int(page_number), book_id))
-
-                db_connection.commit()
-                refresh_tabs()
-                messagebox.showinfo("Success", "Book updated successfully!")
-                update_book_window.destroy()
-            except Exception as e:
-                messagebox.showerror("Error", f"An error occurred: {e}")
-
-        update_book_button = Button(update_book_window, text="Update Book", command=update_book)
-        update_book_button.pack(pady=10)
-
-    update_book_button = Button(button_frame, text="Update Book", command=open_update_book_window)
-    update_book_button.pack(side=LEFT, padx=5)
 
     ### Search Books Feature
     def search_books():
@@ -738,59 +681,6 @@ def start_main_app():
         add_member_button = Button(add_member_window, text="Add Member", command=add_member)
         add_member_button.pack(pady=10)
 
-    def open_update_member_window():
-        selected_item = members_tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Selection Error", "No member selected.")
-            return
-
-        member_values = members_tree.item(selected_item, 'values')
-        member_id = member_values[0]
-
-        update_member_window = Toplevel(main_app)
-        update_member_window.title("Update Member")
-        update_member_window.geometry("400x500")
-
-        fields = ["First Name", "Last Name", "Phone Number", "Email"]
-        entries = {}
-
-        for field, value in zip(fields, member_values[1:]):
-            Label(update_member_window, text=field).pack(pady=5)
-            entry = Entry(update_member_window)
-            entry.insert(0, value)
-            entry.pack(pady=5)
-            entries[field] = entry
-
-        def update_member():
-            first_name = entries["First Name"].get()
-            last_name = entries["Last Name"].get()
-            phone_number = entries["Phone Number"].get()
-            email = entries["Email"].get()
-
-            if not all([first_name, last_name, phone_number, email]):
-                messagebox.showwarning("Input Error", "Please fill all fields.")
-                return
-
-            try:
-                db_cursor.execute("""
-                    UPDATE Members
-                    SET first_name=%s, last_name=%s, phone_number=%s, email=%s
-                    WHERE member_id=%s
-                """, (first_name, last_name, phone_number, email, member_id))
-
-                db_connection.commit()
-                refresh_tabs()
-                messagebox.showinfo("Success", "Member updated successfully!")
-                update_member_window.destroy()
-            except Exception as e:
-                messagebox.showerror("Error", f"An error occurred: {e}")
-
-        update_member_button = Button(update_member_window, text="Update Member", command=update_member)
-        update_member_button.pack(pady=10)
-
-    update_member_button = Button(tabview.tab("Members"), text="Update Member", command=open_update_member_window)
-    update_member_button.pack(pady=5)
-
     def delete_member():
         selected_item = members_tree.selection()
         if not selected_item:
@@ -800,7 +690,8 @@ def start_main_app():
         member_id = members_tree.item(selected_item, 'values')[0]
         db_cursor.execute("DELETE FROM Members WHERE member_id = %s", (member_id,))
         db_connection.commit()
-        refresh_tabs()
+        refresh_members_tree()
+        refresh_borrowing_tree()
         messagebox.showinfo("Success", f"Member with ID {member_id} has been deleted.")
 
     add_member_button = Button(tabview.tab("Members"), text="Add Member", command=open_add_member_window)
@@ -978,7 +869,8 @@ def start_main_app():
                 db_connection.commit()
 
                 # Refresh the Borrowing and Books trees
-                refresh_tabs()
+                refresh_borrowing_tree()
+                refresh_books_tree()
 
                 messagebox.showinfo("Success", "Borrowing record added successfully!")
                 add_borrowing_window.destroy()  # Close the Add Borrowing window
@@ -991,52 +883,6 @@ def start_main_app():
                                    font=("Arial", 12, "bold"))
         add_borrow_button.pack(pady=20)
 
-    def open_update_borrowing_window():
-        selected_item = borrowing_tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Selection Error", "No borrowing record selected.")
-            return
-
-        borrowing_values = borrowing_tree.item(selected_item, 'values')
-        borrow_id = borrowing_values[0]
-
-        update_borrowing_window = Toplevel(main_app)
-        update_borrowing_window.title("Update Borrowing")
-        update_borrowing_window.geometry("400x300")
-
-        # Planned Return Date Calendar
-        Label(update_borrowing_window, text="Planned Return Date").pack(pady=5)
-        return_date_calendar = Calendar(update_borrowing_window, date_pattern="yyyy-mm-dd", selectmode="day")
-        return_date_calendar.pack(pady=10)
-
-        def update_borrowing():
-            planned_return_date = return_date_calendar.get_date()
-
-            if not planned_return_date:
-                messagebox.showwarning("Input Error", "Please select a return date.")
-                return
-
-            try:
-                db_cursor.execute("""
-                    UPDATE Borrowing
-                    SET planned_return_date=%s
-                    WHERE borrow_id=%s
-                """, (planned_return_date, borrow_id))
-
-                db_connection.commit()
-                refresh_tabs()
-                messagebox.showinfo("Success", "Borrowing record updated successfully!")
-                update_borrowing_window.destroy()
-            except Exception as e:
-                messagebox.showerror("Error", f"An error occurred: {e}")
-
-        update_borrowing_button = Button(update_borrowing_window, text="Update Borrowing", command=update_borrowing)
-        update_borrowing_button.pack(pady=10)
-
-    update_borrowing_button = Button(tabview.tab("Borrowing"), text="Update Borrowing",
-                                     command=open_update_borrowing_window)
-    update_borrowing_button.pack(pady=5)
-
     def delete_borrowing():
         selected_item = borrowing_tree.selection()
         if not selected_item:
@@ -1046,7 +892,7 @@ def start_main_app():
         borrow_id = borrowing_tree.item(selected_item, 'values')[0]
         db_cursor.execute("DELETE FROM Borrowing WHERE borrow_id = %s", (borrow_id,))
         db_connection.commit()
-        refresh_tabs()
+        refresh_borrowing_tree()
         messagebox.showinfo("Success", f"Borrowing record with ID {borrow_id} has been deleted.")
 
     def return_book():
@@ -1076,7 +922,9 @@ def start_main_app():
             db_connection.commit()
 
             # UI'yi yenile
-            refresh_tabs()
+            refresh_borrowing_tree()
+            refresh_borrowing_history_tree()
+            refresh_books_tree()
 
             messagebox.showinfo("Success", "Book returned successfully!")
         except Exception as e:
@@ -1333,15 +1181,6 @@ def start_main_app():
 
     # Refresh the Analytics tab with the updated functionality
     refresh_analytics_tab()
-
-    #Refreshes All Tabs
-    def refresh_tabs():
-        refresh_books_tree()
-        refresh_members_tree()
-        refresh_borrowing_tree()
-        refresh_borrowing_history_tree()
-        refresh_analytics_tab()
-
     main_app.mainloop()
 def update_time_label(label):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
