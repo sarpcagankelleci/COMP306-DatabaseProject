@@ -19,7 +19,7 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="Fatura10*",
+  passwd="Emsalinur12345",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
@@ -1044,10 +1044,11 @@ def start_main_app():
 
         db_cursor.execute("""
             SELECT CONCAT(Members.first_name, ' ', Members.last_name) AS member_name, COUNT(*) AS borrow_count
-            FROM Borrowing
-            JOIN Members ON Borrowing.member_id = Members.member_id
-            GROUP BY Members.member_id
-            ORDER BY borrow_count DESC;
+        FROM Borrowing
+        JOIN Members ON Borrowing.member_id = Members.member_id
+        GROUP BY Members.member_id
+        ORDER BY borrow_count DESC
+        LIMIT 10;
         """)
         member_borrow_data = db_cursor.fetchall()
 
@@ -1082,7 +1083,8 @@ def start_main_app():
                 FROM Borrowing
                 JOIN Books ON Borrowing.book_id = Books.book_id
                 JOIN Members ON Borrowing.member_id = Members.member_id
-                WHERE actual_return_date IS NULL;
+                WHERE actual_return_date IS NULL
+                LIMIT 10;
             """)
         never_returned_books = db_cursor.fetchall()
 
