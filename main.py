@@ -11,7 +11,6 @@ from datetime import datetime
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 
-# Imports for database
 import mysql.connector
 import csv
 
@@ -19,19 +18,17 @@ import csv
 db_connection = mysql.connector.connect(
   host="localhost",
   user="root",
-  passwd="Emsalinur12345",
+  passwd="ksu12345",
   auth_plugin='mysql_native_password'
 )
 print(db_connection)
 db_cursor = db_connection.cursor(buffered=True)
 
-# Helper Function: Populate Table from CSV
 def populate_table(file_path, insert_query):
     with open(file_path, 'r') as file:
         reader = csv.reader(file)
-        next(reader)  # Skip header
+        next(reader)
         for row in reader:
-            # Convert 'NULL' strings to Python None
             row = [None if value == 'NULL' else value for value in row]
             db_cursor.execute(insert_query, row)
     db_connection.commit()
@@ -75,7 +72,6 @@ db_cursor.execute("""
         email VARCHAR(50)
     )
 """)
-# Create Borrowing Table
 db_cursor.execute("""
     CREATE TABLE Borrowing (
         borrow_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -91,7 +87,6 @@ db_cursor.execute("""
 
 
 
-# Insert Admin Data
 db_cursor.execute("""
     INSERT INTO Admins (admin_id, password) VALUES
     ('ADM001', '1234'),
@@ -128,7 +123,6 @@ def sort_treeview(tree, column, is_numeric=False):
 
     data = [(tree.set(child, column), child) for child in tree.get_children("")]
 
-    # Determine sort order
     if is_numeric:
         data.sort(key=lambda item: float(item[0]) if item[0].isdigit() else 0, reverse=sort_treeview.descending)
     else:
@@ -137,11 +131,9 @@ def sort_treeview(tree, column, is_numeric=False):
     for index, (val, child) in enumerate(data):
         tree.move(child, "", index)
 
-    # Toggle order for next click
     sort_treeview.descending = not sort_treeview.descending
 
 
-# Set default sorting order
 sort_treeview.descending = False
 
 def setup_sorting(tree, columns, numeric_columns=None):
@@ -164,7 +156,6 @@ def login_screen():
     db_cursor.execute("SELECT admin_id FROM Admins")
     admin_ids = [row[0] for row in db_cursor.fetchall()]
 
-    # Admin ID Dropdown
     admin_id_label = customtkinter.CTkLabel(login_window, text="Select Admin ID:")
     admin_id_label.pack(pady=10)
     admin_id_combo = ttk.Combobox(login_window, values=admin_ids, state="readonly")
@@ -195,7 +186,6 @@ def login_screen():
         else:
             messagebox.showerror("Login Failed", "Invalid Admin ID or Password.")
 
-    # Login Button
     login_button = customtkinter.CTkButton(login_window, text="Login", command=validate_login)
     login_button.pack(pady=20)
 
@@ -210,22 +200,18 @@ def start_main_app():
     main_app.geometry("1200x700+70+0")
     main_app.resizable(False, False)
 
-    # Time Label
     time_label = Label(main_app, font=("Arial", 10), fg="grey")
     time_label.pack(side="bottom", anchor="e", pady=5)
     update_time_label(time_label)  # Start updating time
 
-    # Tabview Setup
     tabview = customtkinter.CTkTabview(master=main_app)
     tabview.pack(pady=10, padx=10, fill="both", expand=True)
 
-    # Define Tabs
     tabs = ["Books", "Members", "Borrowing", "Borrowing History", "Analytics"]
     for tab in tabs:
         tabview.add(tab)
     tabview.set("Books")
 
-    # Create a Frame for buttons in the Books tab
     button_frame = Frame(tabview.tab("Books"))
     button_frame.pack(pady=10, padx=10, fill="x")  # Centered horizontally
 
@@ -338,7 +324,6 @@ def start_main_app():
                 return
 
             try:
-                # Veritabanına ekleme işlemi
                 db_cursor.execute(insert_books_query,
                                   (book_id, title, author, genre, int(year_published), int(quantity), language, int(page_number) ))
                 db_connection.commit()
@@ -351,13 +336,11 @@ def start_main_app():
                 with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
                     writer = csv.writer(csvfile)
 
-                    # Write the header if the file is new
                     if not file_exists:
                         writer.writerow(
                             ['book_id', 'title', 'author', 'genre', 'year_published', 'quantity', 'language',
                              'page_number'])
 
-                    # Append the new book
                     writer.writerow([book_id, title, author, genre, year_published, quantity, language, page_number])
 
                 add_book_window.destroy()
@@ -393,7 +376,6 @@ def start_main_app():
         search_window.title("Search Books")
         search_window.geometry("400x400")
 
-        # Kitap arama kriterleri için label ve entry bölümleri
         title_label = Label(search_window, text="Title")
         title_label.pack(pady=5)
         title_entry = Entry(search_window)
@@ -416,13 +398,11 @@ def start_main_app():
 
         # Arama Fonkisyonu
         def perform_search():
-            # Kullanıcı kriterlerini oku
             title = title_entry.get()
             author = author_entry.get()
             genre = genre_entry.get()
             year_published = year_entry.get()
 
-            # Dinamik SQL Query oluştur
             query = "SELECT * FROM Books WHERE 1=1"
             params = []
 
@@ -443,32 +423,26 @@ def start_main_app():
                     messagebox.showwarning("Input Error", "Year Published should be a number.")
                     return
 
-            # Veritabanında sorguyu çalıştır ve kitap ağacını güncelle
             db_cursor.execute(query, tuple(params))
             results = db_cursor.fetchall()
 
-            # Mevcut tabloda sonuçları göster
             books_tree.delete(*books_tree.get_children())
             for book in results:
                 books_tree.insert("", END, values=book)
 
-            # Kullanıcıya bilgi ver
             messagebox.showinfo("Search Complete", f"{len(results)} results found.")
             search_window.destroy()
 
-        # Arama butonu
         search_button = Button(search_window, text="Search", command=perform_search)
         search_button.pack(pady=20)
 
     def reset_books():
-        """Resets the book list to show all books."""
         books_tree.delete(*books_tree.get_children())
         db_cursor.execute("SELECT * FROM Books")
         for book in db_cursor.fetchall():
             books_tree.insert("", END, values=book)
         messagebox.showinfo("Reset", "Book list has been reset.")
 
-    # Search Books Button
     search_books_button = Button(button_frame, text="Search Books", command=search_books)
     search_books_button.pack(side=LEFT, padx=5)
 
@@ -483,7 +457,6 @@ def start_main_app():
         filter_window.title("Category Filter")
         filter_window.geometry("400x300")
 
-        # Fetch distinct categories
         db_cursor.execute("SELECT DISTINCT genre FROM Books")
         categories = [row[0] for row in db_cursor.fetchall()]
 
@@ -492,7 +465,6 @@ def start_main_app():
             filter_window.destroy()
             return
 
-        # Dropdown for category selection
         category_label = Label(filter_window, text="Select Category:")
         category_label.pack(pady=10)
 
@@ -505,7 +477,6 @@ def start_main_app():
                 messagebox.showwarning("Input Error", "Please select a category.")
                 return
 
-            # Refresh Books Tree with filtered data
             books_tree.delete(*books_tree.get_children())
             db_cursor.execute("SELECT * FROM Books WHERE genre = %s", (selected_category,))
             filtered_books = db_cursor.fetchall()
@@ -528,15 +499,12 @@ def start_main_app():
                 books_tree.insert("", END, values=book)
             filter_window.destroy()
 
-        # Filter Button
         filter_button = Button(filter_window, text="Filter", command=filter_books_by_category)
         filter_button.pack(pady=10)
 
-        # Reset Button
         reset_button = Button(filter_window, text="Reset", command=reset_books_table)
         reset_button.pack(pady=10)
 
-    # Add Category Filter Button to the Books Tab
     category_filter_button = Button(button_frame, text="Category Filter", command=open_category_filter_window)
     category_filter_button.pack(side=LEFT, padx=5)
 
@@ -548,10 +516,8 @@ def start_main_app():
         sort_option_window.title("Sort Option")
         sort_option_window.geometry("400x200")
 
-        # Instruction label
         Label(sort_option_window, text="Select Sort Option:", font=("Arial", 12, "bold")).pack(pady=10)
 
-        # Sort options
         sort_option_var = StringVar(value="Year Published")
         Radiobutton(sort_option_window, text="Year Published", variable=sort_option_var, value="Year Published").pack(
             pady=5)
@@ -562,18 +528,14 @@ def start_main_app():
             """
             Opens the second window to allow users to select the sort order and closes the first window.
             """
-            # Close the first window
             sort_option_window.destroy()
 
-            # Open the second window
             sort_order_window = Toplevel(main_app)
             sort_order_window.title("Sort Order")
             sort_order_window.geometry("400x200")
 
-            # Instruction label
             Label(sort_order_window, text="Choose Sort Order:", font=("Arial", 12, "bold")).pack(pady=10)
 
-            # Sort order options
             sort_order_var = StringVar(value="Ascending")
             Radiobutton(sort_order_window, text="Ascending", variable=sort_order_var, value="Ascending").pack(pady=5)
             Radiobutton(sort_order_window, text="Descending", variable=sort_order_var, value="Descending").pack(pady=5)
@@ -585,7 +547,6 @@ def start_main_app():
                 sort_option = sort_option_var.get()
                 sort_order = sort_order_var.get()
 
-                # Determine column name
                 if sort_option == "Year Published":
                     column_name = "year_published"
                 elif sort_option == "Quantity":
@@ -593,27 +554,21 @@ def start_main_app():
                 else:
                     column_name = "page_number"
 
-                # Construct and execute query
                 query = f"SELECT * FROM Books ORDER BY {column_name} {'ASC' if sort_order == 'Ascending' else 'DESC'}"
                 books_tree.delete(*books_tree.get_children())
                 db_cursor.execute(query)
                 for book in db_cursor.fetchall():
                     books_tree.insert("", END, values=book)
 
-                # Close the sort order window
                 sort_order_window.destroy()
 
-            # Sort Button
             Button(sort_order_window, text="Sort", command=sort_books).pack(pady=20)
 
-        # Next Button to open the sort order window
         Button(sort_option_window, text="Next", command=open_sort_order_window).pack(pady=20)
 
-    # Add the Sort Button to the Books Tab
     sort_button = Button(button_frame, text="Sort", command=open_sort_option_window)
     sort_button.pack(side=LEFT, padx=5)
 
-    ### Members Tab
     members_tree_columns = ("Member ID", "First Name", "Last Name", "Phone Number", "Email")
     members_tree = ttk.Treeview(tabview.tab("Members"), columns=members_tree_columns, show="headings", selectmode="browse")
     members_tree.pack(fill="both", expand=True)
@@ -701,7 +656,6 @@ def start_main_app():
     delete_member_button.pack(pady=5)
 
     # Borrowing Tab
-    # Borrowing Tab
     borrowing_tree_columns = ("Borrow ID", "Book ID", "Member ID", "Borrow Date", "Return Date")
     borrowing_tree = ttk.Treeview(tabview.tab("Borrowing"), columns=borrowing_tree_columns, show="headings",
                                   selectmode="browse")
@@ -722,7 +676,6 @@ def start_main_app():
         """
         borrowing_tree.delete(*borrowing_tree.get_children())  # Clear current data
 
-        # Fetch borrowing data where actual_return_date is NULL
         db_cursor.execute("""
             SELECT borrow_id, book_id, member_id, borrow_date, planned_return_date 
             FROM Borrowing
@@ -744,7 +697,6 @@ def start_main_app():
             else:  # Not overdue
                 tag = "not_due"
 
-            # Insert the row into the treeview with the determined tag
             borrowing_tree.insert("", END, values=(borrow_id, book_id, member_id, borrow_date, planned_return_date),
                                   tags=(tag,))
 
@@ -754,7 +706,6 @@ def start_main_app():
         borrowing_tree.tag_configure("not_due", background="lightgreen", foreground="black")  # Green for future
 
     refresh_borrowing_tree()
-    # Add explanatory label for colors
     explanation_label = Label(
         tabview.tab("Borrowing"),
         text="Color Codes:\n"
@@ -780,7 +731,6 @@ def start_main_app():
         db_cursor.execute("SELECT member_id FROM Members")
         available_members = [row[0] for row in db_cursor.fetchall()]
 
-        # Book ID Dropdown
         book_id_label = Label(add_borrowing_window, text="Book ID", bg="#f5f5f5", font=("Arial", 12, "bold"))
         book_id_label.pack(pady=5)
         book_id_combo = ttk.Combobox(add_borrowing_window, values=available_books, state="readonly")
@@ -792,7 +742,6 @@ def start_main_app():
         member_id_combo = ttk.Combobox(add_borrowing_window, values=available_members, state="readonly")
         member_id_combo.pack(pady=5)
 
-        # Borrow Date Calendar
         borrow_date_label = Label(add_borrowing_window, text="Borrow Date", bg="#f5f5f5", font=("Arial", 12, "bold"))
         borrow_date_label.pack(pady=5)
         borrow_date_calendar = Calendar(
@@ -829,7 +778,6 @@ def start_main_app():
         )
         return_date_calendar.pack(pady=10)
 
-        # Add Borrowing Record Function
         def add_borrowing():
             book_id = book_id_combo.get()
             member_id = member_id_combo.get()
@@ -910,7 +858,6 @@ def start_main_app():
             return
 
         try:
-            # actual_return_date alanını güncelle
             db_cursor.execute("""
                 UPDATE Borrowing SET actual_return_date = %s WHERE borrow_id = %s
             """, (date.today(), borrow_id))
@@ -941,7 +888,6 @@ def start_main_app():
     return_book_button = Button(tabview.tab("Borrowing"), text="Return Book", command=return_book)
     return_book_button.pack(pady=5)
 
-    # Borrowing History Tab
     # Borrowing History Tab
     borrowing_history_tree_columns = (
         "Borrow ID", "Book ID", "Member ID", "Borrow Date", "Planned Return Date", "Actual Return Date", "Fine ($)")
@@ -986,7 +932,6 @@ def start_main_app():
             # Determine the color for late or on-time returns
             row_color = "red" if fine > 0 else "green"
 
-            # Insert row into the treeview with the calculated fine
             borrowing_history_tree.insert(
                 "",
                 END,
@@ -994,7 +939,6 @@ def start_main_app():
                 tags=(row_color,)
             )
 
-        # Configure row colors based on tags
         borrowing_history_tree.tag_configure("green", background="lightgreen", foreground="black")
         borrowing_history_tree.tag_configure("red", background="lightcoral", foreground="black")
 
@@ -1132,10 +1076,8 @@ def start_main_app():
             """)
         consecutive_months_borrowed = db_cursor.fetchall()
 
-        # Prepare the data for the pages
         pages = []
 
-        # Create figures and group them into pages (two figures per page)
         figures = []
 
         if genre_data:
@@ -1229,11 +1171,9 @@ def start_main_app():
             ax.invert_yaxis()
             figures.append(fig)
 
-        # Group figures into pages (two per page)
         for i in range(0, len(figures), 2):
             pages.append(figures[i:i + 2])
 
-        # State for the current page
         current_page = [0]
 
         def show_page():
@@ -1274,7 +1214,6 @@ def start_main_app():
         else:
             Label(tabview.tab("Analytics"), text="No data available for analytics.", font=("Arial", 12)).pack(pady=20)
 
-    # Refresh the Analytics tab with the updated functionality
     refresh_analytics_tab()
     main_app.mainloop()
 def update_time_label(label):
